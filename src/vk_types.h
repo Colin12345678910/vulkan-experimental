@@ -121,10 +121,16 @@ enum class MaterialPass : uint8_t
     Transparent,
     Other
 };
+/// <summary>
+/// An instance of a Material, used as a larger component of a Render Object anda draw context.
+/// </summary>
 struct MaterialInstance
 {
+    //The pipeline associated with the Material, this is typically a normal PBR pipeline.
     MaterialPipeline* pipeline;
+    //The DescriptorSet for this material, this is written typically by whatever class handles the Material
     VkDescriptorSet materialSet;
+    //Describes the render pass used by the Material, used for Transparency effects.
     MaterialPass passType; 
 };
 struct RenderObject
@@ -137,4 +143,9 @@ struct RenderObject
 
     glm::mat4 transform;
     VkDeviceAddress vertexBufferAddress;
+};
+
+struct DrawContext
+{
+    std::vector<RenderObject> OpaqueSurfaces;
 };

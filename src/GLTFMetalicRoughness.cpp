@@ -3,7 +3,6 @@
 
 void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
 {
-    return;
     VkShaderModule meshFragShader;
     if (!vkutil::LoadShaderModule("../../shaders/mesh.frag.spv", engine->_device, &meshFragShader))
     {
@@ -53,9 +52,10 @@ void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
             .SetShaders(meshVertexShader, meshFragShader)
             .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
             .SetPolygonMode(VK_POLYGON_MODE_FILL)
-            .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+            .SetCullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE)
             .SetMultisamplingNone()
             .EnableDepthTest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
+            .DisableBlending()
 
             .SetColorAttachmentFormat(engine->_drawImage.imageFormat)
             .SetDepthFormat(engine->_depthImage.imageFormat)
@@ -75,7 +75,6 @@ void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
 
 void GLTFMetallicRoughness::ClearResources(VkDevice device)
 {
-    return;
     DeletePipeline(device, opaquePipeline);
     DeletePipeline(device, transparentPipeline);
     vkDestroyPipelineLayout(device, opaquePipeline.layout, nullptr); //We share the same layout object
@@ -89,7 +88,6 @@ void GLTFMetallicRoughness::DeletePipeline(VkDevice device, MaterialPipeline pip
 
 MaterialInstance GLTFMetallicRoughness::WriteMaterial(VkDevice device, MaterialPass pass, const MaterialResources& resources, VKDescriptors::DescriptorAllocatorGrowable& descriptorAllocator)
 {
-    return (MaterialInstance)nullptr;
     MaterialInstance matInstance;
 
     matInstance.passType = pass;

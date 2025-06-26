@@ -22,6 +22,7 @@
 #include <GLTFMetalicRoughness.h>
 
 #include "VkBootstrap.h"
+#include "RenderNode.h"
 
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -69,6 +70,10 @@ public:
 	long frameTime{ 0 };
 
 	VmaAllocator _allocator;
+
+	//DrawContext
+	DrawContext mainDrawCtx;
+	std::unordered_map < std::string, std::shared_ptr<RenderNode>> loadedNodes;
 	
 	//VkPipeline _gradientPipeline;
 	VkPipelineLayout _gradientPipelineLayout;
@@ -89,7 +94,7 @@ public:
 
 	static VulkanEngine& Get();
 
-	VKDescriptors::DescriptorAllocator globalDescriptiorAllocator;
+	VKDescriptors::DescriptorAllocatorGrowable globalDescriptiorAllocator;
 
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
@@ -139,6 +144,8 @@ private:
 	void ResizeSwapchain();
 	void DrawGeometry(VkCommandBuffer cmd);
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
+	void UpdateScene();
+	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 
 	GPUSceneData _sceneData;
 	VkDescriptorSetLayout _singleImageDescriptorLayout;

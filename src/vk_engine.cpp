@@ -99,6 +99,7 @@ void VulkanEngine::cleanup()
 
 void VulkanEngine::draw()
 {
+    UpdateScene();
     //std::this_thread::sleep_for(std::chrono::milliseconds(5));
     //Wait for the gpu to finish rendering the last frame.
     VK_CHECK(vkWaitForFences(_device, 1, &GetCurrentFrame()._renderFence, true, 1000000000));
@@ -235,9 +236,13 @@ void VulkanEngine::run()
 
         long timeForFrame = lastestframeTime - frameTime; //in microseconds
         double framerate = timeForFrame / 10000000.0f;
+
+        //std::this_thread::sleep_for(std::chrono::milliseconds(16) - std::chrono::nanoseconds(timeForFrame));
         framerate = 1.0f / framerate;
 
         frameTime = lastestframeTime;
+
+        
         // Handle events on queue
         while (SDL_PollEvent(&e) != 0) {
             // close the window when user alt-f4s or clicks the X button
@@ -524,7 +529,7 @@ void VulkanEngine::InitializeSyncStructures()
 void VulkanEngine::InitializeDescriptors()
 {
     // Create a descriptor pool of size 10, 1
-    std::vector<VKDescriptors::DescriptorAllocator::PoolSizeRatio> sizes =
+    std::vector<VKDescriptors::DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
     {
         { 
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 
@@ -597,6 +602,12 @@ void VulkanEngine::InitializePipelines()
 {
     InitializeBackgroundPipelines();
     InitializeMeshPipeline();
+
+    metalRoughMaterial.BuildPipelines(this);
+    _mainDeletionQueue.Push([&]()
+    {
+        metalRoughMaterial.ClearResources(_device);
+    });
 }
 
 void VulkanEngine::InitializeBackgroundPipelines()
@@ -889,6 +900,52 @@ void VulkanEngine::InitializeDefaultData()
         DestroyImage(_blackImage);
         DestroyImage(_errorImage);
     });
+
+    // Create our materials
+    GLTFMetallicRoughness::MaterialResources resources;
+
+    //Default resource
+    resources.colorImage = _whiteImage;
+    resources.colorSampler = _defaultSamplerLinear;
+    resources.metalRoughImage = _whiteImage;
+
+    //Uniform buffer
+    AllocatedBuffer materialConstants = CreateBuffer(
+        sizeof(GLTFMetallicRoughness::MaterialConstants),
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    //We made the buffer in VK and then casted it so it is accessible in C++.
+    GLTFMetallicRoughness::MaterialConstants* sceneUniform = (GLTFMetallicRoughness::MaterialConstants*)materialConstants.allocation->GetMappedData();
+    
+    sceneUniform->colorFactors = glm::vec4{ 1,1,1,1 };
+    sceneUniform->metalRoughFactors = glm::vec4{ 1,0.5,0,0 };
+
+    _mainDeletionQueue.Push([=, this]()
+    {
+        DestroyBuffer(materialConstants);
+    });
+
+    resources.dataBuffer = materialConstants.buffer;
+    resources.dataBufferOffset = 0;
+
+    defaultMaterial = metalRoughMaterial.WriteMaterial(_device, MaterialPass::MainColor, resources, globalDescriptiorAllocator);
+
+    for (auto& m : testMeshes)
+    {
+        std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+        newNode->mesh = m;
+
+        newNode->localTransform = glm::mat4{ 1.0f };
+        newNode->globalTransform = glm::mat4{ 1.0f };
+
+        for (auto& s : m->surfaces)
+        {
+            s.material = std::make_shared<GLTFMaterial>(defaultMaterial);
+        }
+
+        loadedNodes[m->name] = std::move(newNode); //Optimization to avoid copying and instead just canabalize newMode thats in the current scope.
+    }
 }
 
 GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
@@ -952,11 +1009,11 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
         DestroyBuffer(gpuSceneDataBuf);
     });
 
-    //write the buffer
+    //write the Global GPU buffer
     GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuf.allocation->GetMappedData();
     *sceneUniformData = _sceneData;
 
-    //Create a descriptorSet that binds the buff
+    //Create a descriptorSet that binds the global GPU dataBuffer
     VkDescriptorSet globalDescriptor = GetCurrentFrame()._frameDescriptors.Allocate(_device, _gpuSceneDataDescriptorLayout);
 
     VKDescriptors::DescriptorWriter writer;
@@ -998,28 +1055,17 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     }
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipelineLayout, 0, 1, &imageSet, 0, nullptr);
 
-    GPUDrawPushConstants pushConstants;
-    
-    //MatrixMath
+    FlushDrawCtx(cmd, globalDescriptor);
+    //GPUDrawPushConstants pushConstants;
 
-    glm::mat4 view = glm::translate(glm::vec3{ 0, 0, -5 + (std::sin(_frameNumber / 144.0f) )});
+    //pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
+    //pushConstants.worldMatrix = _sceneData.proj * _sceneData.view;
 
-    //Camera
-    glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
+    //vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
 
-    //Invert the y dir on the projectMatrix
-    proj[1][1] *= -1;
+    //vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-    pushConstants.worldMatrix = proj * view;
-    //EndMatrixMath
-    
-    pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
-
-    vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
-
-    vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
+    //vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
     vkCmdEndRendering(cmd);
 }
@@ -1034,6 +1080,67 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
     vkCmdEndRendering(cmd);
+}
+
+void VulkanEngine::UpdateScene()
+{
+    mainDrawCtx.OpaqueSurfaces.clear();
+
+    loadedNodes["Suzanne"]->Draw(glm::mat4{ 1.f }, mainDrawCtx);
+
+    for (int x = -3; x < 10; x++)
+    {
+        glm::mat4 scale = glm::scale(glm::vec3(0.2));
+        glm::mat4 translation = glm::translate(glm::vec3(x, 0, x));
+
+        loadedNodes["Cube"]->Draw(translation * scale, mainDrawCtx);
+    }
+
+    //Camera
+    glm::mat4 view = glm::translate(glm::vec3{ 0, 0, -5 + (std::sin(_frameNumber / 144.0f)) });
+    glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
+    _sceneData.view = view;
+    _sceneData.proj = proj;
+
+    //Invert the y dir on the projectMatrix
+    proj[1][1] *= -1;
+
+    _sceneData.viewProj = proj * view;
+
+    _sceneData.ambientColor = glm::vec4(0.1f);
+    _sceneData.sunlightColor = glm::vec4(1.0f);
+    _sceneData.sunlightDirection = glm::vec4(0.0f, 1.0f, 0.5f, 1.0f);
+}
+
+void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor)
+{
+    for (const auto& draw : mainDrawCtx.OpaqueSurfaces)
+    {
+        
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 0, 1, &globalDescriptor, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 1, 1, &draw.material->materialSet, 0, nullptr);
+
+        vkCmdBindIndexBuffer(cmd, draw.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        GPUDrawPushConstants pushConstants;
+        pushConstants.vertexBuffer = draw.vertexBufferAddress;
+        pushConstants.worldMatrix = draw.transform;//glm::rotate(draw.transform, glm::mediump_float32(_frameNumber / 100.0f), glm::vec3(1, 1, 1));//draw.transform;
+
+        vkCmdPushConstants(cmd, draw.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(cmd, draw.indexCount, 1, draw.firstIndex, 0, 0);
+    }
+
+    //GPUDrawPushConstants pushConstants;
+
+//pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
+//pushConstants.worldMatrix = _sceneData.proj * _sceneData.view;
+
+//vkCmdPushConstants(cmd, _meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
+
+//vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+//vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 }
 
 AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)

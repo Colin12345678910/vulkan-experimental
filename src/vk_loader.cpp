@@ -121,7 +121,7 @@ std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGLTFMeshes(VulkanEngi
 		}
 
 		//Display VertNormals
-		constexpr bool OverrideColors = true;
+		constexpr bool OverrideColors = false;
 
 		if (OverrideColors)
 		{

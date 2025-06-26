@@ -19,6 +19,8 @@ add_executable (engine
   camera.h
   IRenderable.cpp
   IRenderable.h
+  RenderNode.cpp
+  RenderNode.h
   GLTFMetalicRoughness.cpp
   GLTFMetalicRoughness.h
 )

@@ -10,5 +10,6 @@
 */
 class IRenderable
 {
-	//virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
+public:
+	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) {};
 };
