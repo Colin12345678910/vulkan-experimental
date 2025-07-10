@@ -12,13 +12,18 @@
 
 #define VMA_IMPLEMENTATION
 #define VMA_DEBUG_INITIALIZE_ALLOCATIONS 1
+
+//#define VMA_DEBUG_LOG_FORMAT(format, ...) do { \
+//       printf((format), __VA_ARGS__); \
+//       printf("\n"); \
+//} while(false)
 #include "vk_mem_alloc.h"
 #include <glm/gtx/transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 
 using namespace vkutil;
 
-#if NDebug
+#if NDEBUG
 const bool USE_VALIDATION = false;
 #else
 const bool USE_VALIDATION = true;
@@ -35,7 +40,7 @@ void VulkanEngine::init()
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE );
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_MOUSE_CAPTURE );
 
     _window = SDL_CreateWindow(
         "Vulkan Engine",
@@ -61,6 +66,13 @@ void VulkanEngine::init()
 
     InitializeDefaultData();
 
+    std::string structurePath = "..\\..\\assets\\arena.glb"; //structure arena
+	auto structure = loadGLTF(this, structurePath);
+
+	assert(structure.has_value(), "Failed to load structure glb file");
+
+	loadedScenes["structure"] = structure.value();
+
     // everything went fine
     _isInitialized = true;
 }
@@ -70,6 +82,8 @@ void VulkanEngine::cleanup()
     if (_isInitialized) {
         //Wait for the GPU to finish up.
         vkDeviceWaitIdle(_device);
+
+        loadedScenes.clear();
         for (int i = 0; i < FRAME_OVERLAP; i++)
         {
             vkDestroyCommandPool(_device, _frames[i]._commandPool, nullptr);
@@ -248,7 +262,7 @@ void VulkanEngine::run()
             // close the window when user alt-f4s or clicks the X button
             if (e.type == SDL_QUIT)
                 bQuit = true;
-
+            
             if (e.type == SDL_WINDOWEVENT) {
                 if (e.window.event == SDL_WINDOWEVENT_MINIMIZED) {
                     stop_rendering = true;
@@ -266,7 +280,7 @@ void VulkanEngine::run()
                 }
                 fmt::println("Keycode is {}!", std::to_string(e.key.keysym.sym));
             }
-
+            _camera.processSDLEvent(e);
             //Send SDL events
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
@@ -846,16 +860,16 @@ void VulkanEngine::InitializeMeshPipeline()
 
 void VulkanEngine::InitializeDefaultData()
 {
-    testMeshes = loadGLTFMeshes(this, "..\\..\\assets\\basicmesh.glb").value();
+    //testMeshes = loadGLTFMeshes(this, "..\\..\\assets\\basicmesh.glb").value();
 
-    _mainDeletionQueue.Push([=]()
-    {
-        for (auto& mesh : testMeshes)
-        {
-            DestroyBuffer(mesh->meshBuffers.indexBuffer);
-            DestroyBuffer(mesh->meshBuffers.vertexBuffer);
-        }
-    });
+    //_mainDeletionQueue.Push([=]()
+    //{
+    //    for (auto& mesh : testMeshes)
+    //    {
+    //        DestroyBuffer(mesh->meshBuffers.indexBuffer);
+    //        DestroyBuffer(mesh->meshBuffers.vertexBuffer);
+    //    }
+    //});
 
     //Setup default texture
     uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
@@ -931,21 +945,21 @@ void VulkanEngine::InitializeDefaultData()
 
     defaultMaterial = metalRoughMaterial.WriteMaterial(_device, MaterialPass::MainColor, resources, globalDescriptiorAllocator);
 
-    for (auto& m : testMeshes)
-    {
-        std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-        newNode->mesh = m;
-
-        newNode->localTransform = glm::mat4{ 1.0f };
-        newNode->globalTransform = glm::mat4{ 1.0f };
-
-        for (auto& s : m->surfaces)
-        {
-            s.material = std::make_shared<GLTFMaterial>(defaultMaterial);
-        }
-
-        loadedNodes[m->name] = std::move(newNode); //Optimization to avoid copying and instead just canabalize newMode thats in the current scope.
-    }
+//    for (auto& m : testMeshes)
+//    {
+//        std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+//        newNode->mesh = m;
+//
+//        newNode->localTransform = glm::mat4{ 1.0f };
+//        newNode->globalTransform = glm::mat4{ 1.0f };
+//
+//        for (auto& s : m->surfaces)
+//        {
+//            s.material = std::make_shared<GLTFMaterial>(defaultMaterial);
+//        }
+//
+//        loadedNodes[m->name] = std::move(newNode); //Optimization to avoid copying and instead just canabalize newMode thats in the current scope.
+//    }
 }
 
 GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
@@ -1086,18 +1100,37 @@ void VulkanEngine::UpdateScene()
 {
     mainDrawCtx.OpaqueSurfaces.clear();
 
-    loadedNodes["Suzanne"]->Draw(glm::mat4{ 1.f }, mainDrawCtx);
+    //loadedNodes["Suzanne"]->Draw(glm::mat4{ 1.f }, mainDrawCtx);
 
-    for (int x = -3; x < 10; x++)
-    {
-        glm::mat4 scale = glm::scale(glm::vec3(0.2));
-        glm::mat4 translation = glm::translate(glm::vec3(x, 0, x));
+    //for (int x = -3; x < 10; x++)
+    //{
+    //    glm::mat4 scale = glm::scale(glm::vec3(0.2));
+    //    glm::mat4 translation = glm::translate(glm::vec3(x, 0, x));
 
-        loadedNodes["Cube"]->Draw(translation * scale, mainDrawCtx);
-    }
+    //    loadedNodes["Cube"]->Draw(translation * scale, mainDrawCtx);
+    //}
+    //for (int x = 0; x < 30; x++)
+    //{
+    //    for (int y = 0; y < 30; y++)
+    //    {
+    //        glm::mat4 rotation = glm::rotate(glm::radians(45.0f * (_frameNumber / (2000.0f + x - y))), glm::vec3(0, 1, 0));
+    //        glm::mat4 scale = glm::scale(glm::vec3(0.2));
+    //        glm::mat4 translation = glm::translate(glm::vec3(x * 50, 0, y * 50));
+
+    //        loadedScenes["structure"]->Draw(translation * rotation * scale, mainDrawCtx);
+    //    }
+    //}
+
+    
+    glm::mat4 scale = glm::scale(glm::vec3(0.2));
+    glm::mat4 translation = glm::translate(glm::vec3(0, 0, 0));
+
+    loadedScenes["structure"]->Draw(glm::mat4{1.0f}, mainDrawCtx);
 
     //Camera
-    glm::mat4 view = glm::translate(glm::vec3{ 0, 0, -5 + (std::sin(_frameNumber / 144.0f)) });
+    _camera.Update();
+
+    glm::mat4 view = _camera.getView();
     glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
     _sceneData.view = view;
     _sceneData.proj = proj;
@@ -1143,7 +1176,7 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
 //vkCmdDrawIndexed(cmd, testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
 {
     AllocatedImage newImg;
     newImg.imageFormat = format;
@@ -1164,6 +1197,8 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     // allocate and create
     VK_CHECK(vmaCreateImage(_allocator, &imgInfo, &allocInfo, &newImg.image, &newImg.allocation, nullptr));
 
+	vmaSetAllocationName(_allocator, newImg.allocation, name.c_str());
+
     //If the format is a supported depth format, we need to tell the GPU that we want a depthTex
     VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
     if (format == VK_FORMAT_D32_SFLOAT)
@@ -1180,9 +1215,9 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     return newImg;
 }
 
-AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
 {
-    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
+    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name);
 
     size_t dataSize = size.depth * size.height * size.width * 4; //Image with the size, height and depth has 4 bytes per pixel;
     AllocatedBuffer uploadBuff = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -1218,6 +1253,7 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
 
 void VulkanEngine::DestroyImage(const AllocatedImage& img)
 {
+    //fmt::println("Deallocating {}", img.allocation->GetName());
     vkDestroyImageView(_device, img.imageView, nullptr);
     vmaDestroyImage(_allocator, img.image, img.allocation);
 }

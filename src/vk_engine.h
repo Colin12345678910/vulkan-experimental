@@ -21,9 +21,9 @@
 
 #include <GLTFMetalicRoughness.h>
 
+#include "camera.h"
 #include "VkBootstrap.h"
 #include "RenderNode.h"
-
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -82,6 +82,8 @@ public:
 	VkPipelineLayout _meshPipelineLayout;
 	VkPipeline _meshPipeline;
 
+	Camera _camera;
+
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };
@@ -111,7 +113,7 @@ public:
 	std::vector<ComputeEffect> backgroundEffects;
 	int currentBackground = 0;
 
-	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
+	//std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	//initializes everything in the engine
 	void init();
@@ -125,6 +127,17 @@ public:
 	void drawBackground(VkCommandBuffer cmd);
 
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
+	AllocatedImage GetDefaultImage() { return _errorImage; }
+	VkSampler GetDefaultSampler(bool linear = true) { return linear ? _defaultSamplerLinear : _defaultSamplerNearest; }
+
+	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage");
+	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage");
+
+	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+	void DestroyBuffer(const AllocatedBuffer& buffer);
+	void DestroyImage(const AllocatedImage& img);
+
 
 	//run main loop
 	void run();
@@ -150,22 +163,17 @@ private:
 	GPUSceneData _sceneData;
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
-	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-
 	//Images
 	AllocatedImage _whiteImage;
 	AllocatedImage _blackImage;
 	AllocatedImage _greyImage;
 	AllocatedImage _errorImage;
 
+	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
+
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
-	void DestroyImage(const AllocatedImage& img);
-
-	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-	void DestroyBuffer(const AllocatedBuffer& buffer);
 	void CreateSwapchain();
 	void DestroySwapchain();
 };

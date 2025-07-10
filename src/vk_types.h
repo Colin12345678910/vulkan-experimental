@@ -22,7 +22,6 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
-//class VKDescriptors::DescriptorAllocatorGrowable;
 
 #define VK_CHECK(x)                                                     \
     do {                                                                \
@@ -131,7 +130,24 @@ struct MaterialInstance
     //The DescriptorSet for this material, this is written typically by whatever class handles the Material
     VkDescriptorSet materialSet;
     //Describes the render pass used by the Material, used for Transparency effects.
-    MaterialPass passType; 
+    MaterialPass passType;
+};
+struct GLTFMaterial
+{
+    MaterialInstance data;
+};
+struct GeoSurface
+{
+    uint32_t startIndex;
+    uint32_t count;
+    std::shared_ptr<GLTFMaterial> material;
+};
+struct MeshAsset
+{
+    std::string name;
+
+    std::vector<GeoSurface> surfaces;
+    GPUMeshBuffers meshBuffers;
 };
 struct RenderObject
 {

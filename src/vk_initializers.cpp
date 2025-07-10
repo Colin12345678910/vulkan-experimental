@@ -335,3 +335,16 @@ VkPipelineShaderStageCreateInfo vkinit::pipeline_shader_stage_create_info(VkShad
     info.pName = entry;
     return info;
 }
+
+VkSamplerCreateInfo vkinit::sampler_create_info(VkFilter magFilter, VkFilter minFilter, VkSamplerMipmapMode mode)
+{
+	VkSamplerCreateInfo info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr };
+	info.magFilter = magFilter;
+	info.minFilter = minFilter;
+    info.mipmapMode = mode;
+
+	info.maxLod = VK_LOD_CLAMP_NONE;
+    info.minLod = 0;
+
+    return info;
+}
