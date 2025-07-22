@@ -29,6 +29,15 @@ void MeshNode::Draw(const glm::mat4 topMatrix, DrawContext& ctx)
 		obj.transform = nodeMatrix;
 		obj.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
 
+		switch (s.material->data.passType)
+		{
+			case MaterialPass::MainColor:
+				ctx.OpaqueSurfaces.push_back(obj);
+				break;
+			case MaterialPass::Transparent:
+				ctx.TransparentSurfaces.push_back(obj);
+				break;
+		}
 		ctx.OpaqueSurfaces.push_back(obj);
 	}
 

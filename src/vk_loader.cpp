@@ -329,6 +329,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		//TODO : Support more alpha modes
 		else if (mat.alphaMode == fastgltf::AlphaMode::Mask)
 		{
+			passType = MaterialPass::MainColor;
 			fmt::println("Alpha mode mask not supported yet, using main color pass for now.");
 		}
 

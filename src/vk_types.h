@@ -118,6 +118,7 @@ enum class MaterialPass : uint8_t
 {
     MainColor,
     Transparent,
+	Cutout,
     Other
 };
 /// <summary>
@@ -164,4 +165,5 @@ struct RenderObject
 struct DrawContext
 {
     std::vector<RenderObject> OpaqueSurfaces;
+	std::vector<RenderObject> TransparentSurfaces;
 };

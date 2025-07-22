@@ -39,6 +39,15 @@ struct FrameData
 	VKDescriptors::DescriptorAllocatorGrowable _frameDescriptors;
 };
 
+struct EngineStats
+{
+	double frameTime{ 0.0f };
+	int triangleCount{ 0 };
+	int drawCalls{ 0 };
+	double sceneUpdateTime{ 0.0f };
+	double meshDrawTime{ 0.0f };
+};
+
 class VulkanEngine {
 public:
 	FrameData _frames[FRAME_OVERLAP];
@@ -109,6 +118,8 @@ public:
 
 	GLTFMetallicRoughness metalRoughMaterial;
 	MaterialInstance defaultMaterial;
+
+	EngineStats stats;
 
 	std::vector<ComputeEffect> backgroundEffects;
 	int currentBackground = 0;
