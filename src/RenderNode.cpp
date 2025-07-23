@@ -26,6 +26,8 @@ void MeshNode::Draw(const glm::mat4 topMatrix, DrawContext& ctx)
 		obj.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
 		obj.material = &s.material->data;
 
+		obj.bounds = s.bounds;
+
 		obj.transform = nodeMatrix;
 		obj.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
 

@@ -117,7 +117,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 					imageSize.height = height;
 					imageSize.depth = 1;
 
-					img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false, std::string("GLTF::URI::" + image.name));
+					img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::URI::" + image.name));
 					stbi_image_free(data); //Free the image data after we are done with it
 				}
 				else
@@ -136,7 +136,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 					imageSize.width = width;
 					imageSize.height = height;
 					imageSize.depth = 1;
-					img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false, std::string("GLTF::VEC::" + image.name));
+					img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::VEC::" + image.name));
 					stbi_image_free(data); //Free the image data after we are done with it
 				}
 			},
@@ -160,7 +160,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 							imageSize.width = width;
 							imageSize.height = height;
 							imageSize.depth = 1;
-							img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false, std::string("GLTF::BUFV::" + image.name));
+							img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::BUFV::" + image.name));
 							stbi_image_free(data); //Free the image data after we are done with it
 						}
 					}
@@ -450,6 +450,21 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 				{
 					newSurface.material = materials[0]; //Default material if no material is assigned
 				}
+
+				//Find the min/max bounds of the mesh
+				glm::vec3 minBounds = vertices[initialVert].position; //Initialize min bounds with the first vertex position
+				glm::vec3 maxBounds = vertices[initialVert].position; //Initialize max bounds with the first vertex position
+
+				for (size_t i = initialVert; i < vertices.size(); i++)
+				{
+					const glm::vec3& pos = vertices[i].position;
+					minBounds = glm::min(minBounds, pos); //Update min bounds
+					maxBounds = glm::max(maxBounds, pos); //Update max bounds
+				}
+
+				newSurface.bounds.origin = (maxBounds + minBounds) / 2.0f; //Set the origin
+				newSurface.bounds.extents = (maxBounds - minBounds) / 2.0f; //Set the extents
+				newSurface.bounds.radius = glm::length(newSurface.bounds.extents); //Calculate the radius
 
 				newMesh->surfaces.push_back(newSurface); //Add the surface to the mesh
 			}

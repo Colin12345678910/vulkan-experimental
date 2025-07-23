@@ -50,6 +50,9 @@ void VulkanEngine::init()
         _windowExtent.height,
         window_flags);
 
+	SDL_SetRelativeMouseMode(SDL_TRUE);
+	SDL_SetWindowGrab(_window, SDL_TRUE);
+
     InitializeVulkan();
 
     InitializeSwapchain();
@@ -1182,7 +1185,10 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
 
     for (uint32_t i = 0; i < mainDrawCtx.OpaqueSurfaces.size(); i++)
     {
-		opaqueDraws.push_back(i);
+        if (IsVisible(mainDrawCtx.OpaqueSurfaces[i], _sceneData.viewProj))
+        {
+            opaqueDraws.push_back(i);
+        }
 	}
 
     std::sort(opaqueDraws.begin(), opaqueDraws.end(), [&](uint32_t a, uint32_t b)
@@ -1329,7 +1335,14 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
 
         vkCmdCopyBufferToImage(cmd, uploadBuff.buffer, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-        vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        if (mipmapped)
+        {
+            vkutil::GenerateMipmaps(cmd, newImg.image, VkExtent2D(newImg.imageExtent.width, newImg.imageExtent.height));
+        }
+        else
+        {
+            vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
     });
 
     DestroyBuffer(uploadBuff);
@@ -1397,4 +1410,58 @@ void VulkanEngine::DestroySwapchain()
     {
         vkDestroyImageView(_device, _swapchainImageViews[i], nullptr);
     }
+}
+
+bool VulkanEngine::IsVisible(const RenderObject& obj, const glm::mat4& viewProj)
+{
+    std::array<glm::vec3, 8> corners
+    {
+        glm::vec3(-1, -1, -1),
+        glm::vec3(-1, -1, 1),
+        glm::vec3(-1, 1, -1),
+        glm::vec3(-1, 1, 1),
+        glm::vec3(1, -1, -1),
+        glm::vec3(1, -1, 1),
+        glm::vec3(1, 1, -1),
+        glm::vec3(1, 1, 1)
+    };
+
+	glm::mat4 matrix = viewProj * obj.transform;
+
+	glm::vec3 min = glm::vec3(1.5, 1.5, 1.5);
+	glm::vec3 max = glm::vec3(-1.5, -1.5, -1.5);
+    
+    for (int corner = 0; corner < corners.size(); corner++)
+    {
+        //Convert vertex to clip space
+        glm::vec4 v = matrix * glm::vec4(obj.bounds.origin + (corners[corner] * obj.bounds.extents), 1.0f);
+
+        // Transform the vertex perspective space
+		v.x /= v.w;
+		v.y /= v.w;
+        v.z /= v.w;
+
+        //Update the min and max
+        min = glm::min(min, glm::vec3(v));
+		max = glm::max(max, glm::vec3(v));
+    }
+
+	//Check if the bounding box is in the view frustum
+    
+    //Behind the camera
+    if (min.z > 1.0f || max.z < 0.0f)
+    {
+        return false;
+	}
+	// Outside the left/right frustum
+    if (min.x > 1.0f || max.x < -1.0f)
+    {
+        return false;
+	}
+	// Outside the top/bottom frustum
+    if (min.y > 1.5f || max.y < -1.5f)
+    {
+        return true;
+    }
+    return true;
 }

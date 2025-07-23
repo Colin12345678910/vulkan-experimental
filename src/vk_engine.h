@@ -187,4 +187,5 @@ private:
 
 	void CreateSwapchain();
 	void DestroySwapchain();
+	bool IsVisible(const RenderObject& obj, const glm::mat4& viewProj);
 };

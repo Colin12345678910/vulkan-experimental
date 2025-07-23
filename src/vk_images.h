@@ -12,4 +12,5 @@ namespace vkutil
 	//Transitions an image from one layout to another
 	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout);
 	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize);
+	void GenerateMipmaps(VkCommandBuffer cmd, VkImage img, VkExtent2D imageSize);
 };
