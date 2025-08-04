@@ -347,10 +347,19 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		if (mat.pbrData.baseColorTexture.has_value())
 		{
 			size_t img = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].imageIndex.value(); //Image ineex
-			size_t sampler = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex.value(); //Sampler index
+			auto samplerOptional = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex;
+
+			if (samplerOptional.has_value())
+			{
+				resources.colorSampler = file.samplers[samplerOptional.value()]; //Get the sampler
+			}
+			else
+			{
+				resources.colorSampler = engine->GetDefaultSampler(); //Use the default sampler if no sampler is assigned
+			}
 
 			resources.colorImage = images[img]; //Get the image
-			resources.colorSampler = file.samplers[sampler]; //Get the sampler
+			
 		}
 
 		//Build

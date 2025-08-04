@@ -69,7 +69,7 @@ void VulkanEngine::init()
 
     InitializeDefaultData();
 
-    std::string structurePath = "..\\..\\assets\\arena.glb"; //structure arena
+    std::string structurePath = "..\\..\\assets\\structure.glb"; //structure arena
 	auto structure = loadGLTF(this, structurePath);
 
 	assert(structure.has_value(), "Failed to load structure glb file");
@@ -117,7 +117,7 @@ void VulkanEngine::cleanup()
 void VulkanEngine::draw()
 {
     UpdateScene();
-    //std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    
     //Wait for the gpu to finish rendering the last frame.
     VK_CHECK(vkWaitForFences(_device, 1, &GetCurrentFrame()._renderFence, true, 1000000000));
 
@@ -307,9 +307,6 @@ void VulkanEngine::run()
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        //DebugUI
-        //ImGui::ShowDemoWindow();
-
         if (ImGui::Begin("Background"))
         {
             //ImGui::LabelText("Frame", std::to_string(framerate).c_str());
@@ -335,6 +332,7 @@ void VulkanEngine::run()
 			ImGui::Text("Update Time: %f ms", stats.sceneUpdateTime);
 			ImGui::Text("Triangles: %i", stats.triangleCount);
 			ImGui::Text("Drawcalls: %i", stats.drawCalls);
+            ImGui::Text("Transparents: %i", stats.drawCalls);
             ImGui::End();
         }
 
@@ -348,6 +346,16 @@ void VulkanEngine::run()
         auto end = std::chrono::system_clock::now();
 
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+        //Frame limiter
+		auto waitTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::microseconds(3333) - elapsed); //3.33 ms for 300 fps
+        if (waitTime.count() > 0)
+        {
+            std::this_thread::sleep_for(waitTime);
+			elapsed = waitTime + elapsed; //Add the wait time to the elapsed time.
+		}
+
+
         stats.frameTime = elapsed.count() / 1000.0f; //in milliseconds
     }
 }
@@ -383,6 +391,8 @@ void VulkanEngine::InitializeVulkan()
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
 
+    VkPhysicalDeviceFeatures featuresBase{};
+    featuresBase.fillModeNonSolid = VK_TRUE; //Enable wireframe mode
 
     //use vkbootstrap to select a gpu. 
     //We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
@@ -391,6 +401,7 @@ void VulkanEngine::InitializeVulkan()
         .set_minimum_version(1, 3)
         .set_required_features_13(features)
         .set_required_features_12(features12)
+		.set_required_features(featuresBase)
         .set_surface(_surface)
         .select()
         .value();
@@ -1038,6 +1049,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     //Reset counters
     stats.triangleCount = 0;
 	stats.drawCalls = 0;
+    stats.transparents = 0;
 
 	auto start = std::chrono::system_clock::now();
 
@@ -1251,6 +1263,7 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
     for (const auto& d : mainDrawCtx.TransparentSurfaces)
     {
         draw(d);
+        stats.transparents++;
 	}
 
 	mainDrawCtx.OpaqueSurfaces.clear();

@@ -46,6 +46,7 @@ struct EngineStats
 	int drawCalls{ 0 };
 	double sceneUpdateTime{ 0.0f };
 	double meshDrawTime{ 0.0f };
+	int transparents{ 0 };
 };
 
 class VulkanEngine {

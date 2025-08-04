@@ -133,5 +133,5 @@ void vkutil::GenerateMipmaps(VkCommandBuffer cmd, VkImage img, VkExtent2D imageS
 			imageSize = mipSize;
 		}
 	}
-    TransitionImage(cmd, img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    TransitionImage(cmd, img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
