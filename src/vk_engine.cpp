@@ -40,7 +40,7 @@ void VulkanEngine::init()
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_MOUSE_CAPTURE );
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN ); // | SDL_WINDOW_MOUSE_CAPTURE
 
     _window = SDL_CreateWindow(
         "Vulkan Engine",
@@ -49,8 +49,8 @@ void VulkanEngine::init()
         _windowExtent.width,
         _windowExtent.height,
         window_flags);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
 
-	SDL_SetRelativeMouseMode(SDL_TRUE);
 	SDL_SetWindowGrab(_window, SDL_TRUE);
 
     InitializeVulkan();
@@ -69,7 +69,7 @@ void VulkanEngine::init()
 
     InitializeDefaultData();
 
-    std::string structurePath = "..\\..\\assets\\structure.glb"; //structure arena
+    std::string structurePath = "..\\..\\assets\\arena.glb"; //structure arena
 	auto structure = loadGLTF(this, structurePath);
 
 	assert(structure.has_value(), "Failed to load structure glb file");
@@ -277,6 +277,8 @@ void VulkanEngine::run()
                 }
             }
 
+			bool processEvents = true;  
+
             if (e.type == SDL_KEYDOWN)
             {
                 if (e.key.keysym.sym == SDL_KeyCode::SDLK_ESCAPE)
@@ -284,8 +286,21 @@ void VulkanEngine::run()
                     bQuit = true;
                 }
                 fmt::println("Keycode is {}!", std::to_string(e.key.keysym.sym));
+
+                if (e.key.keysym.sym == SDL_KeyCode::SDLK_LSHIFT)
+                {
+                    SDL_SetRelativeMouseMode(SDL_FALSE);
+				}
+                else
+                {
+					SDL_SetRelativeMouseMode(SDL_TRUE);
+                }
             }
-            _camera.processSDLEvent(e);
+
+            if (SDL_GetRelativeMouseMode() != SDL_FALSE)
+            {
+                _camera.processSDLEvent(e);
+            }
             //Send SDL events
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
@@ -334,6 +349,12 @@ void VulkanEngine::run()
 			ImGui::Text("Drawcalls: %i", stats.drawCalls);
             ImGui::Text("Transparents: %i", stats.drawCalls);
             ImGui::End();
+        }
+
+        if (ImGui::Begin("CVars"))
+        {
+            CVar::Get()->ImGuiDisplayCVars();
+			ImGui::End();
         }
 
         ImGui::End();
@@ -1131,6 +1152,9 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
     vkCmdEndRendering(cmd);
 }
 
+AutoFloatCVar ambientLight("float.ambient", "Ambient Light Intensity", 0.5f);
+AutoFloatCVar sunLight("float.sunlight", "Sun Light Intensity", 1.0f);
+
 void VulkanEngine::UpdateScene()
 {
 	auto start = std::chrono::system_clock::now();
@@ -1161,7 +1185,7 @@ void VulkanEngine::UpdateScene()
     glm::mat4 scale = glm::scale(glm::vec3(0.2));
     glm::mat4 translation = glm::translate(glm::vec3(0, 0, 0));
 
-    loadedScenes["structure"]->Draw(glm::mat4{1.0f}, mainDrawCtx);
+    loadedScenes["structure"]->Draw(glm::mat4{10.0f}, mainDrawCtx);
 
     //Camera
     _camera.Update();
@@ -1176,8 +1200,8 @@ void VulkanEngine::UpdateScene()
 
     _sceneData.viewProj = proj * view;
 
-    _sceneData.ambientColor = glm::vec4(0.1f);
-    _sceneData.sunlightColor = glm::vec4(1.0f);
+    _sceneData.ambientColor = glm::vec4(ambientLight.Get());
+    _sceneData.sunlightColor = glm::vec4(sunLight.Get());
     _sceneData.sunlightDirection = glm::vec4(0.0f, 1.0f, 0.5f, 1.0f);
 
     auto end = std::chrono::system_clock::now();
@@ -1185,6 +1209,8 @@ void VulkanEngine::UpdateScene()
 
 	stats.sceneUpdateTime = elapsed.count() / 1000.0f;
 }
+
+
 
 void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor)
 {

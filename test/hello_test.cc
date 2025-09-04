@@ -31,3 +31,12 @@ TEST(HelloTest, EngineInvoke)
 
 	engine.cleanup();
 }
+
+TEST(HelloTest, CVAR)
+{
+	auto cvar = CVar::Get()->CreateFloatCVar("test.float", "A test float", 1.0f);
+	EXPECT_EQ(*(CVar::Get()->CVar::GetFloatCVar(BY_NAME("test.float"))), 1.0f);
+
+	//CVar::Get()->SetFloatCVar(std::hash<std::string>{}("test.float"), 2.0f);
+	//EXPECT_EQ(CVar::Get()->CVar::GetFloatCVar(BY_NAME("test.float")), 2.0f);
+}

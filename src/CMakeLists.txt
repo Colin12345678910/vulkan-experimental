@@ -28,6 +28,8 @@ add_library(vk_core STATIC
   RenderNode.h
   GLTFMetalicRoughness.cpp
   GLTFMetalicRoughness.h
+  CVars.cpp
+  CVars.h
 )
 
 function(setup executable) #Basically just assign the correct CXX standards.

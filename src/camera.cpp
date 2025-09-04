@@ -1,5 +1,7 @@
 #include "camera.h"
 
+AutoFloatCVar CVAR_CameraSpeed("camera.speed", "Speed of the camera movement", 0.15f);
+
 Camera::Camera()
 {
 	velocity = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -68,5 +70,5 @@ void Camera::processSDLEvent(SDL_Event& e)
 void Camera::Update()
 {
 	glm::mat4 cameraRotation = getRotation();
-	position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.15f, 0.0f));
+	position += glm::vec3(cameraRotation * glm::vec4(velocity * CVAR_CameraSpeed.Get(), 0.0f));
 }
