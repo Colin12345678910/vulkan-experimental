@@ -268,7 +268,7 @@ void CVarImpl::ImGuiDisplayCVars()
 	for(int i = 0; i < floatCVars.lastCvarIndex; i++)
 	{
 		CVarParameter* param = floatCVars.cvars[i].parameters;	
-		ImGui::SliderFloat(param->name.c_str(), &floatCVars.cvars[i].current, floatCVars.cvars[i].initial * 0.0f, 10.0f);
+		ImGui::SliderFloat(param->name.c_str(), &floatCVars.cvars[i].current, -1.0 * floatCVars.cvars[i].initial, 2.0 * floatCVars.cvars[i].initial);
 	}
 
 	ImGui::SeparatorText("Integers");

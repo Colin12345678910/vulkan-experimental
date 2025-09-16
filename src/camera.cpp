@@ -71,4 +71,6 @@ void Camera::Update()
 {
 	glm::mat4 cameraRotation = getRotation();
 	position += glm::vec3(cameraRotation * glm::vec4(velocity * CVAR_CameraSpeed.Get(), 0.0f));
+
+	//fmt::println("X {}, Y {}, Z {}", position.x, position.y, position.z);
 }

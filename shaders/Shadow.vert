@@ -5,11 +5,6 @@
 
 #include "input_structures.glsl"
 
-layout (location = 0) out vec3 outNormal;
-layout (location = 1) out vec3 outColor;
-layout (location = 2) out vec2 outUV;
-layout (location = 3) out vec3 shadowPos;
-
 struct Vertex 
 {
 	vec3 position;
@@ -37,14 +32,5 @@ void main()
 	
 	vec4 position = vec4(v.position, 1.0f);
 	
-	vec4 shadow = position * sceneData.shadowCoord;
-	shadowPos = shadow.xyz / shadow.w;
-	
-	
 	gl_Position = sceneData.viewProj * PushConstants.renderMatrix * position;
-	
-	outNormal = (PushConstants.renderMatrix * vec4(v.normal, 0.f)).xyz;
-	outColor = v.color.xyz * materialData.colorFactors.xyz;
-	outUV.x = v.uv_x;
-	outUV.y = v.uv_y;
 }
