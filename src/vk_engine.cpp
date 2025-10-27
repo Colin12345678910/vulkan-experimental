@@ -21,8 +21,6 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 
-AutoBoolCVar doOrtho("doOrtho", "E", false);
-
 using namespace vkutil;
 
 #if NDEBUG
@@ -42,7 +40,7 @@ void VulkanEngine::init()
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN ); // | SDL_WINDOW_MOUSE_CAPTURE
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE ); // | SDL_WINDOW_MOUSE_CAPTURE
 
     _window = SDL_CreateWindow(
         "Vulkan Engine",
@@ -71,7 +69,7 @@ void VulkanEngine::init()
 
     InitializeDefaultData();
 
-    std::string structurePath = "..\\..\\assets\\test.glb"; //structure arena
+    std::string structurePath = "..\\..\\assets\\Sponza.gltf"; //structure arena
 	auto structure = loadGLTF(this, structurePath);
 
 	assert(structure.has_value(), "Failed to load structure glb file");
@@ -121,6 +119,8 @@ void VulkanEngine::cleanup()
     loadedEngine = nullptr;
 }
 
+AutoBoolCVar CVAR_DoShadows("Render.DoShadows", "Controls whether shadows should render", true);
+
 void VulkanEngine::draw()
 {
     UpdateScene();
@@ -151,6 +151,7 @@ void VulkanEngine::draw()
     //Reset cmd so we can begin recording
     VK_CHECK(vkResetCommandBuffer(cmd, 0)); //No flags neeeded.
 
+    if (CVAR_DoShadows.Get())
     {
         //ShadowPass
         VK_CHECK(vkResetFences(_device, 1, &GetCurrentFrame()._shadowFence));
@@ -201,7 +202,8 @@ void VulkanEngine::draw()
     vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vkutil::TransitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
     
-    vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+    if (CVAR_DoShadows.Get())
+        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     DrawGeometry(cmd);
 
@@ -377,6 +379,7 @@ void VulkanEngine::run()
             ImGui::InputFloat4("data3", (float*)&selected.data.data3);
             ImGui::InputFloat4("data4", (float*)&selected.data.data4);
         }
+        ImGui::End();
 
         if (ImGui::Begin("Stats"))
         {
@@ -387,8 +390,8 @@ void VulkanEngine::run()
 			ImGui::Text("Triangles: %i", stats.triangleCount);
 			ImGui::Text("Drawcalls: %i", stats.drawCalls);
             ImGui::Text("Transparents: %i", stats.drawCalls);
-            ImGui::End();
         }
+        ImGui::End();
 
         ImGui::Begin("Camera");
         shadowMap.TransferMapToR32(VulkanEngine::Get());
@@ -396,8 +399,7 @@ void VulkanEngine::run()
 
         if (ImGui::Begin("CVars"))
         {
-            CVar::Get()->ImGuiDisplayCVars();
-			ImGui::End();
+            CVar::Get()->ImGuiDisplayCVars();	
         }
 
         ImGui::End();
@@ -412,13 +414,14 @@ void VulkanEngine::run()
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
         //Frame limiter
+        /*
 		auto waitTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::microseconds(3333) - elapsed); //3.33 ms for 300 fps
         if (waitTime.count() > 0)
         {
             std::this_thread::sleep_for(waitTime);
 			elapsed = waitTime + elapsed; //Add the wait time to the elapsed time.
 		}
-
+        */
 
         stats.frameTime = elapsed.count() / 1000.0f; //in milliseconds
     }
@@ -1123,13 +1126,6 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     return newSurface;
 }
 
-AutoFloatCVar CVAR_ortho_y("ortho.y", "Speed of the camera movement", 0.0f);
-AutoFloatCVar CVAR_ortho_x("ortho.x", "Speed of the camera movement", 0.0f);
-AutoFloatCVar CVAR_ortho_z("ortho.z", "Speed of the camera movement", 0.0f);
-
-AutoFloatCVar CVAR_ortho_pitch("ortho.pitch", "Speed of the camera movement", 0.0f);
-AutoFloatCVar CVAR_ortho_yaw("ortho.yaw", "Speed of the camera movement", 0.0f);
-
 void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 {
     //Reset counters
@@ -1281,18 +1277,24 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	stats.meshDrawTime = elapsed.count() / 1000.0f;
 }
 
-AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 2000.0f);
+AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 10000.0f);
+AutoFloatCVar CVAR_shadow_scale("shadow.scale", "Speed of the camera movement", 300.0f);
+
+AutoFloatCVar CVAR_shadow_x("shadow.x", "Position of the Shadowmap in the X plane", 1000.0f);
+AutoFloatCVar CVAR_shadow_y("shadow.y", "Position of the Shadowmap in the Y plane", -1000.0f);
+AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 1000.0f);
 
 void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
 {
     GPUSceneData shadowScene;
     {
-        shadowScene.proj = glm::ortho(-300.0f, 300.0f, -300.0f, 300.0f, 0.001f, farPlane.Get());
+        shadowScene.proj = glm::ortho(-CVAR_shadow_scale.Get(), CVAR_shadow_scale.Get(), -CVAR_shadow_scale.Get(), CVAR_shadow_scale.Get(), 0.001f, farPlane.Get());
 
-        glm::quat pitchRotation = glm::angleAxis(CVAR_ortho_pitch.Get(), glm::vec3{ 1.0f, 0.0f, 0.0f });
-        glm::quat yawRotation = glm::angleAxis(CVAR_ortho_yaw.Get(), glm::vec3{ 0.0f, -1.0f, 0.0f });
+        float shadowX = _camera.position.x + CVAR_shadow_x.Get();
+        float shadowY = _camera.position.y + CVAR_shadow_y.Get();
+        float shadowZ = _camera.position.z + CVAR_shadow_z.Get();
 
-        glm::mat4 cameraRotation = glm::lookAt(glm::vec3(1000.0f, 1000.0f, 1000.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 cameraRotation = glm::lookAt(glm::vec3(shadowX, shadowY, shadowZ), _camera.position, glm::vec3(0.0f, 1.0f, 0.0f));
 
         shadowScene.view = cameraRotation;
 
@@ -1382,17 +1384,6 @@ void VulkanEngine::UpdateScene()
     glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
     //proj = glm::ortho(-2.0f, 2.0f, -3.0f, 3.0f, 0.001f, 1000000.0f);//glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
 
-    if (doOrtho.Get())
-    {
-        proj = glm::ortho(-300.0f, 300.0f, -300.0f, 300.0f, 0.001f, 10000000.0f);
-
-        glm::quat pitchRotation = glm::angleAxis(CVAR_ortho_pitch.Get(), glm::vec3{ 1.0f, 0.0f, 0.0f });
-        glm::quat yawRotation = glm::angleAxis(CVAR_ortho_yaw.Get(), glm::vec3{ 0.0f, -1.0f, 0.0f });
-
-        glm::mat4 cameraRotation = glm::lookAt(glm::vec3(1000.0f, 1000.0f, 1000.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        
-        view = cameraRotation;
-    }
     _sceneData.view = view;
     _sceneData.proj = proj;
 
@@ -1407,6 +1398,9 @@ void VulkanEngine::UpdateScene()
 
     auto end = std::chrono::system_clock::now();
 	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    _sceneData.time.x = elapsed.count();
+	_sceneData.time.y = _frameNumber % 100;
 
 	stats.sceneUpdateTime = elapsed.count() / 1000.0f;
 }

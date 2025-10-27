@@ -8,6 +8,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 int fPath = 0, Vector = 0, BView = 0, Meshes = 0, Samplers = 0, Materials = 0;
+int unknownImg = 0;
 
 void LoadedGLTF::ClearAll()
 {
@@ -103,7 +104,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 				assert(filePath.fileByteOffset == 0); //We don't support offsets with
 				assert(filePath.uri.isLocalPath()); //We cannot load remote images
 
-				const std::string root("../../assets/");
+				const std::string root("../../assets/textures/");
 				std::string path(filePath.uri.path().begin(), filePath.uri.path().end());
 
 				path = root + path; //Prepend the root path to the image path
@@ -275,9 +276,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	{
 		if (file.images.count(img.name.c_str())) //If the image is already loaded, skip it
 		{
-			fmt::println("Image {} already loaded, skipping.", img.name);
-			images.push_back(engine->GetDefaultImage());
-			continue;
+			fmt::println("Image {} already loaded, renaming...", img.name);
+			
+			img.name = "Unknown Image " + std::to_string(unknownImg++);
 		}
 		std::optional<AllocatedImage> image = loadImage(engine, gltf, img); //Load the image
 
@@ -329,8 +330,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		//TODO : Support more alpha modes
 		else if (mat.alphaMode == fastgltf::AlphaMode::Mask)
 		{
-			passType = MaterialPass::MainColor;
-			fmt::println("Alpha mode mask not supported yet, using main color pass for now.");
+			passType = MaterialPass::Other;
+			fmt::println("Alpha mode mask not supported yet, using main transparent pass for now.");
 		}
 
 		// Setting up default resources

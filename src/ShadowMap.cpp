@@ -71,7 +71,7 @@ void ShadowMap::Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor, VKDe
 
 void ShadowMap::Init()
 {
-    CreateShadowMap(VulkanEngine::Get(), 2048, 2048);
+    CreateShadowMap(VulkanEngine::Get(), 8192, 8192);
 }
 
 
