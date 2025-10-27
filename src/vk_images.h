@@ -10,7 +10,8 @@
 namespace vkutil 
 {
 	//Transitions an image from one layout to another
-	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout);
+	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, VkImageAspectFlagBits flags = VkImageAspectFlagBits::VK_IMAGE_ASPECT_NONE);
 	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize);
+	void DepthToColor(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize);
 	void GenerateMipmaps(VkCommandBuffer cmd, VkImage img, VkExtent2D imageSize);
 };

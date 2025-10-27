@@ -24,6 +24,7 @@
 #include "camera.h"
 #include "VkBootstrap.h"
 #include "RenderNode.h"
+#include "ShadowMap.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -31,6 +32,7 @@ struct FrameData
 {
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
 	VkFence _renderFence;
+	VkFence _shadowFence;
 
 	VkCommandPool _commandPool;
 	VkCommandBuffer _mainCommandBuffer;
@@ -136,6 +138,8 @@ public:
 	//draw loop
 	void draw();
 
+	std::vector<std::function<void()>> _drawList;
+
 	void drawBackground(VkCommandBuffer cmd);
 
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
@@ -149,6 +153,8 @@ public:
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	void DestroyBuffer(const AllocatedBuffer& buffer);
 	void DestroyImage(const AllocatedImage& img);
+	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
+	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor, VkPipeline pipelineOverride, VkPipelineLayout pipelineLayoutOverride);
 
 
 	//run main loop
@@ -168,9 +174,9 @@ private:
 	void InitializeImgui();
 	void ResizeSwapchain();
 	void DrawGeometry(VkCommandBuffer cmd);
+	void DrawShadows(VkCommandBuffer cmd);
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void UpdateScene();
-	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 
 	GPUSceneData _sceneData;
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
@@ -186,6 +192,9 @@ private:
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
+	std::vector<IGeometryPass*> geometryPasses;
+
+	ShadowMap shadowMap;
 	void CreateSwapchain();
 	void DestroySwapchain();
 	bool IsVisible(const RenderObject& obj, const glm::mat4& viewProj);

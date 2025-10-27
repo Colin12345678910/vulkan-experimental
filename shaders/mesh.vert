@@ -8,6 +8,8 @@
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
+layout (location = 3) out vec4 shadowPos;
+layout (location = 4) out vec3 outPos;
 
 struct Vertex 
 {
@@ -34,7 +36,12 @@ void main()
 {
 	Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
 	
+	outPos = v.position;
+	
 	vec4 position = vec4(v.position, 1.0f);
+	
+	shadowPos = sceneData.shadowCoord * PushConstants.renderMatrix * position;
+	
 	
 	gl_Position = sceneData.viewProj * PushConstants.renderMatrix * position;
 	

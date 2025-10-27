@@ -130,6 +130,14 @@ vkutil::PipelineBuilder vkutil::PipelineBuilder::SetColorAttachmentFormat(VkForm
 	return *this;
 }
 
+vkutil::PipelineBuilder vkutil::PipelineBuilder::SetNoColorAttachment()
+{
+	_colorAttachmentFormat = VK_FORMAT_UNDEFINED;
+	_renderInfo.colorAttachmentCount = 0;
+	_renderInfo.pColorAttachmentFormats = nullptr;
+	return *this;
+}
+
 vkutil::PipelineBuilder vkutil::PipelineBuilder::SetDepthFormat(VkFormat format)
 {
 	_renderInfo.depthAttachmentFormat = format;

@@ -30,6 +30,9 @@ add_library(vk_core STATIC
   GLTFMetalicRoughness.h
   CVars.cpp
   CVars.h
+  ShadowMap.cpp
+  ShadowMap.h
+  IRenderpass.h
 )
 
 function(setup executable) #Basically just assign the correct CXX standards.

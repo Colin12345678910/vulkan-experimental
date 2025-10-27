@@ -39,6 +39,7 @@ namespace vkutil
 		PipelineBuilder SetMultisamplingNone();
 		PipelineBuilder DisableBlending();
 		PipelineBuilder SetColorAttachmentFormat(VkFormat format);
+		PipelineBuilder SetNoColorAttachment();
 		PipelineBuilder SetDepthFormat(VkFormat format);
 		PipelineBuilder DisableDepthTest();
 		PipelineBuilder EnableDepthTest(bool depthWriteEnable, VkCompareOp op);

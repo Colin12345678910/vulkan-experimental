@@ -3,7 +3,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout)
+void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, VkImageAspectFlagBits flags)
 {
     VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     imageBarrier.pNext = nullptr;
@@ -17,6 +17,10 @@ void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout c
     imageBarrier.newLayout = newLayout;
 
     VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    if (flags != VkImageAspectFlagBits::VK_IMAGE_ASPECT_NONE)
+    {
+        aspectMask = flags;
+    }
     imageBarrier.subresourceRange = vkinit::image_subresource_range(aspectMask);
     imageBarrier.image = image;
 
