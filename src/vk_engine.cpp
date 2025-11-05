@@ -20,6 +20,8 @@
 #include "vk_mem_alloc.h"
 #include <glm/gtx/transform.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 using namespace vkutil;
 
@@ -29,6 +31,8 @@ const bool USE_VALIDATION = false;
 const bool USE_VALIDATION = true;
 #endif
 VulkanEngine* loadedEngine = nullptr;
+
+AutoBoolCVar CVAR_ScreenShot("engine.screenshot", "Takes a screenshot next frame", false);
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 void VulkanEngine::init()
@@ -128,6 +132,8 @@ void VulkanEngine::draw()
     //Wait for the gpu to finish rendering the last frame.
     VK_CHECK(vkWaitForFences(_device, 1, &GetCurrentFrame()._renderFence, true, 1000000000));
 
+
+
     GetCurrentFrame()._deletionQueue.flush();
     GetCurrentFrame()._frameDescriptors.ClearPools(_device);
     
@@ -214,6 +220,27 @@ void VulkanEngine::draw()
     //copy image from drawImage to swapchain.
     vkutil::CopyImageToImage(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
 
+    //Do we have a screenshot request?
+    AllocatedBuffer screenshotBuffer;
+    if (CVAR_ScreenShot.Get())
+    {
+		//Make the swapchain into a Layout for copying
+        vkutil::TransitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        
+        //Create a buffer, then copy the image onto it for later.
+        screenshotBuffer = CreateBuffer(_swapchainExtent.height * _swapchainExtent.width * 4, VK_BUFFER_USAGE_2_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
+        vkutil::CopyImageToBuffer(cmd, _swapchainImages[swapchainImageIndex], screenshotBuffer.buffer, _swapchainExtent);
+		
+        // Return the swapchain to the correct format for normal rendering
+        vkutil::TransitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        GetCurrentFrame()._deletionQueue.Push(
+        [=]()
+        {
+            DestroyBuffer(screenshotBuffer);
+        });
+    }
+
     //Make the swapchain into a Layout for IMGUI
     vkutil::TransitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL); //VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
@@ -252,6 +279,36 @@ void VulkanEngine::draw()
     presentInfo.pImageIndices = &swapchainImageIndex;
 
     VkResult presentResult = vkQueuePresentKHR(_graphicsQueue, &presentInfo);
+
+	//Take Screenshot
+	//TODO: Probably move this into a optional component of a render graph?
+	if (CVAR_ScreenShot.Get())
+    {
+        fmt::print("Taking Screenshot...\n");
+
+        //DANGER
+        // This is a memory pointer, we must not overrun it.
+        void* screenShot = screenshotBuffer.info.pMappedData;//screenshotBuffer.allocation->GetMappedData();
+		//Copy to a vector for easier manipulation.
+        std::vector<uint8_t> rawData(static_cast<uint8_t*>(screenShot), static_cast<uint8_t*>(screenShot) + (_swapchainExtent.width * _swapchainExtent.height * 4));
+        
+        for (int i = 0; i < rawData.size(); i += 4)
+        {
+			std::swap(rawData[i + 0], rawData[i + 2]);
+        }
+
+        int code = stbi_write_jpg("screenshot.jpg", _swapchainExtent.width, _swapchainExtent.height, 4, rawData.data(), 100);
+        if (!code)
+        {
+			fmt::print("Screenshot error {}", code); //Maybe get error string from stb?
+        }
+        else
+        {
+			fmt::print("Screenshot saved to screenshot.jpg\n"); //TODO: Timestamp
+        }
+
+        CVAR_ScreenShot.Set(false);
+    }
     
     if (presentResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
@@ -1635,6 +1692,14 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
     VmaAllocationCreateInfo vmaInfo{};
     vmaInfo.usage = memoryUsage;
     vmaInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    if (memoryUsage == VMA_MEMORY_USAGE_AUTO ||
+        memoryUsage == VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE ||
+        memoryUsage == VMA_MEMORY_USAGE_AUTO_PREFER_HOST)
+    {
+        vmaInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT; 
+		// Just disregard sequential writes, as atm this is only used for screenshots, which are infrequent.
+    }
     
     AllocatedBuffer buff;
 

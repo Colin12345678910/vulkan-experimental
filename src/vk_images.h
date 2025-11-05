@@ -13,5 +13,6 @@ namespace vkutil
 	void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, VkImageAspectFlagBits flags = VkImageAspectFlagBits::VK_IMAGE_ASPECT_NONE);
 	void CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize);
 	void DepthToColor(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize);
+	void CopyImageToBuffer(VkCommandBuffer cmd, VkImage source, VkBuffer destination, VkExtent2D srcSize);
 	void GenerateMipmaps(VkCommandBuffer cmd, VkImage img, VkExtent2D imageSize);
 };

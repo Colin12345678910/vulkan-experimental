@@ -13,6 +13,11 @@ void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
     {
         fmt::println("Error when building mesh.vert.spv");
     }
+	VkShaderModule cutoutFragmentShader;
+    if (!vkutil::LoadShaderModule("../../shaders/mesh_cutout.frag.spv", engine->_device, &cutoutFragmentShader))
+    {
+		fmt::println("Error when building mesh_cutout.frag.spv");
+    }
 
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
@@ -45,6 +50,7 @@ void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
 
     opaquePipeline.layout = newLayout;
     transparentPipeline.layout = newLayout;
+	cutoutPipeline.layout = newLayout;
 
     {
         vkutil::PipelineBuilder builder;
@@ -67,6 +73,12 @@ void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
             .EnableBlendingAdditive()
             .EnableDepthTest(false, VK_COMPARE_OP_GREATER_OR_EQUAL)
             .BuildPipeline(engine->_device);
+
+		cutoutPipeline.pipeline = builder
+			.DisableBlending()
+			.EnableDepthTest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
+			.SetShaders(meshVertexShader, meshFragShader)
+			.BuildPipeline(engine->_device);
         
         vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
         vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
@@ -77,6 +89,7 @@ void GLTFMetallicRoughness::ClearResources(VkDevice device)
 {
     DeletePipeline(device, opaquePipeline);
     DeletePipeline(device, transparentPipeline);
+	DeletePipeline(device, cutoutPipeline);
     vkDestroyPipelineLayout(device, opaquePipeline.layout, nullptr); //We share the same layout object
     vkDestroyDescriptorSetLayout(device, materialLayout, nullptr);
 }
@@ -101,7 +114,7 @@ MaterialInstance GLTFMetallicRoughness::WriteMaterial(VkDevice device, MaterialP
         matInstance.pipeline = &transparentPipeline;
         break;
     case MaterialPass::Other:
-        matInstance.pipeline = &opaquePipeline;
+        matInstance.pipeline = &cutoutPipeline;
         fmt::println("Invalid Material on Object."); //At some point I want to add a UUID, and naming system for objects.
         break;
     default:

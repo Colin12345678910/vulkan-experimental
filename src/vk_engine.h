@@ -26,6 +26,7 @@
 #include "RenderNode.h"
 #include "ShadowMap.h"
 
+
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 struct FrameData
