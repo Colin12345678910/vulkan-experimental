@@ -48,6 +48,13 @@ float shadowCoeff()
 }
 void main()
 {
+	vec4 tex = texture(colorTex, inUV);
+	if (tex.a < 0.2f)
+	{
+		discard;
+		return;
+	}
+	
 	float lightValue = max(dot(inNormal, sceneData.sunlightDirection.xyz), 0.1f);
 	lightValue = min(lightValue, 1.0f);
 	
@@ -62,7 +69,7 @@ void main()
 	float shadowDepth = shadowCoeff();//texture(shadowTex, shadow.xy).x;//
 	
 	
-	vec3 color = inColor * texture(colorTex, inUV).xyz;
+	vec3 color = inColor * tex.xyz;
 	vec3 ambient = color * sceneData.ambientColor.xyz;
 
 	//else

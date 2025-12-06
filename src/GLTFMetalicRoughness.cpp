@@ -77,11 +77,12 @@ void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
 		cutoutPipeline.pipeline = builder
 			.DisableBlending()
 			.EnableDepthTest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
-			.SetShaders(meshVertexShader, meshFragShader)
+			.SetShaders(meshVertexShader, cutoutFragmentShader)
 			.BuildPipeline(engine->_device);
         
         vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
         vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
+		vkDestroyShaderModule(engine->_device, cutoutFragmentShader, nullptr);
     }
 }
 

@@ -33,6 +33,7 @@ const bool USE_VALIDATION = true;
 VulkanEngine* loadedEngine = nullptr;
 
 AutoBoolCVar CVAR_ScreenShot("engine.screenshot", "Takes a screenshot next frame", false);
+AutoBoolCVar CVAR_ShadowPCF("shadow.PCF", "Enables PCF", false);
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 void VulkanEngine::init()
@@ -297,7 +298,9 @@ void VulkanEngine::draw()
 			std::swap(rawData[i + 0], rawData[i + 2]);
         }
 
-        int code = stbi_write_jpg("screenshot.jpg", _swapchainExtent.width, _swapchainExtent.height, 4, rawData.data(), 100);
+		std::string datetime = std::format("{:%Y-%m-%d_%H-%M-%S}", std::chrono::system_clock::now());
+        datetime = "Screenshot_" + datetime + ".jpg";
+        int code = stbi_write_jpg(datetime.c_str(), _swapchainExtent.width, _swapchainExtent.height, 4, rawData.data(), 100);
         if (!code)
         {
 			fmt::print("Screenshot error {}", code); //Maybe get error string from stb?
@@ -1458,6 +1461,7 @@ void VulkanEngine::UpdateScene()
 
     _sceneData.time.x = elapsed.count();
 	_sceneData.time.y = _frameNumber % 100;
+	_sceneData.time.w = CVAR_ShadowPCF.Get() ? 1.0f : 0.0f;
 
 	stats.sceneUpdateTime = elapsed.count() / 1000.0f;
 }
@@ -1567,9 +1571,6 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
 
     auto draw = [&](const RenderObject& draw)
     {
-
-        //vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 1, 1, &draw.material->materialSet, 0, nullptr);
-
         if (draw.indexBuffer != lastIndexBuffer)
         {
             lastIndexBuffer = draw.indexBuffer;
