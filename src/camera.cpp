@@ -26,6 +26,12 @@ glm::mat4 Camera::getRotation()
 	return glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
 }
 
+glm::vec4 Camera::getForward()
+{
+	glm::mat4 cameraRotation = getRotation();
+	return glm::vec4(cameraRotation * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
+}
+
 void Camera::processSDLEvent(SDL_Event& e)
 {
 	switch (e.type)

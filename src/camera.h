@@ -18,6 +18,8 @@ public:
 
 	glm::mat4 getView();
 	glm::mat4 getRotation();
+	glm::vec4 getForward();
+	glm::vec4 getPosition() { return glm::vec4(position, 0.0f); }
 
 	void processSDLEvent(SDL_Event& e);
 	void Update();

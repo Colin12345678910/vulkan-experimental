@@ -73,6 +73,9 @@ struct ComputePushConstants
     glm::vec4 data2;
     glm::vec4 data3;
     glm::vec4 data4;
+	glm::vec4 cameraForward;
+	glm::mat4 viewProj;
+    glm::mat4 invProj;
 };
 struct ComputeEffect
 {

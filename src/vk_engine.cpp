@@ -66,6 +66,8 @@ void VulkanEngine::init()
 
     InitializeSyncStructures();
 
+    InitializeDefaultImages();
+
     InitializeDescriptors();
 
     InitializePipelines();
@@ -330,6 +332,11 @@ void VulkanEngine::drawBackground(VkCommandBuffer cmd)
     VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
     
     ComputeEffect& effect = backgroundEffects[currentBackground];
+    effect.data.viewProj = glm::inverse(_sceneData.view);//glm::inverse(_camera.getRotation());
+	effect.data.invProj = glm::inverse(_sceneData.proj);
+
+    effect.data.cameraForward = _camera.getPosition();
+    effect.data.data4 = _sceneData.time;
     //Bind the gradientPipeline
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
 
@@ -716,6 +723,7 @@ void VulkanEngine::InitializeDescriptors()
         VKDescriptors::DescriptorLayoutBuilder builder;
         _drawImageDescriptorLayout = builder
             .AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+			.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
             .Build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
     }
     //Alloc a descriiptorset for our draw image
@@ -769,6 +777,7 @@ void VulkanEngine::UpdateDescriptors()
 {
     VKDescriptors::DescriptorWriter writer;
     writer.WriteImage(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.WriteImage(1, _noiseImage.imageView, _defaultSamplerLinear, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     writer.UpdateSet(_device, _drawImageDescriptors);
 }
@@ -847,8 +856,8 @@ void VulkanEngine::InitializeBackgroundPipelines()
 
     VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
 
-    backgroundEffects.push_back(gradient);
     backgroundEffects.push_back(sky);
+    backgroundEffects.push_back(gradient);
 
     vkDestroyShaderModule(_device, computeShader, nullptr);
     vkDestroyShaderModule(_device, skyShader, nullptr);
@@ -861,7 +870,7 @@ void VulkanEngine::InitializeBackgroundPipelines()
 }
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function)
-{
+{ 
     VK_CHECK(vkResetFences(_device, 1, &_immediateFence));
     VK_CHECK(vkResetCommandBuffer(_immediateCommandBuffer, 0));
 
@@ -1032,19 +1041,8 @@ void VulkanEngine::InitializeMeshPipeline()
     });
 }
 
-void VulkanEngine::InitializeDefaultData()
+void VulkanEngine::InitializeDefaultImages()
 {
-    //testMeshes = loadGLTFMeshes(this, "..\\..\\assets\\basicmesh.glb").value();
-
-    //_mainDeletionQueue.Push([=]()
-    //{
-    //    for (auto& mesh : testMeshes)
-    //    {
-    //        DestroyBuffer(mesh->meshBuffers.indexBuffer);
-    //        DestroyBuffer(mesh->meshBuffers.vertexBuffer);
-    //    }
-    //});
-
     //Setup default texture
     uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
     _whiteImage = CreateImage((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -1066,7 +1064,12 @@ void VulkanEngine::InitializeDefaultData()
     }
 
     _errorImage = CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
-    
+
+    const std::string root("../../assets/environment/clouds/perlin.png");
+    int32_t w, h, channels;
+    unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
+	_noiseImage = CreateImage(data, VkExtent3D{ (uint32_t)w, (uint32_t)h, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
     VkSamplerCreateInfo sampl{ .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 
     sampl.magFilter = VK_FILTER_NEAREST;
@@ -1075,7 +1078,7 @@ void VulkanEngine::InitializeDefaultData()
     vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerNearest);
 
     sampl.magFilter = VK_FILTER_LINEAR;
-    sampl.minFilter = VK_FILTER_LINEAR; 
+    sampl.minFilter = VK_FILTER_LINEAR;
     vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
 
     _mainDeletionQueue.Push([&]()
@@ -1087,8 +1090,12 @@ void VulkanEngine::InitializeDefaultData()
         DestroyImage(_greyImage);
         DestroyImage(_blackImage);
         DestroyImage(_errorImage);
+		DestroyImage(_noiseImage);
     });
+}
 
+void VulkanEngine::InitializeDefaultData()
+{
     // Create our materials
     GLTFMetallicRoughness::MaterialResources resources;
 
@@ -1354,7 +1361,9 @@ void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
         float shadowY = _camera.position.y + CVAR_shadow_y.Get();
         float shadowZ = _camera.position.z + CVAR_shadow_z.Get();
 
-        glm::mat4 cameraRotation = glm::lookAt(glm::vec3(shadowX, shadowY, shadowZ), _camera.position, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::vec3 shadowPos = _camera.position + glm::vec3(_camera.getForward()) * CVAR_shadow_scale.Get();
+
+        glm::mat4 cameraRotation = glm::lookAt(glm::vec3(shadowX, shadowY, shadowZ), shadowPos, glm::vec3(0.0f, 1.0f, 0.0f));
 
         shadowScene.view = cameraRotation;
 
@@ -1409,28 +1418,6 @@ void VulkanEngine::UpdateScene()
 {
 	auto start = std::chrono::system_clock::now();
     mainDrawCtx.OpaqueSurfaces.clear();
-
-    //loadedNodes["Suzanne"]->Draw(glm::mat4{ 1.f }, mainDrawCtx);
-
-    //for (int x = -3; x < 10; x++)
-    //{
-    //    glm::mat4 scale = glm::scale(glm::vec3(0.2));
-    //    glm::mat4 translation = glm::translate(glm::vec3(x, 0, x));
-
-    //    loadedNodes["Cube"]->Draw(translation * scale, mainDrawCtx);
-    //}
-    //for (int x = 0; x < 30; x++)
-    //{
-    //    for (int y = 0; y < 30; y++)
-    //    {
-    //        glm::mat4 rotation = glm::rotate(glm::radians(45.0f * (_frameNumber / (2000.0f + x - y))), glm::vec3(0, 1, 0));
-    //        glm::mat4 scale = glm::scale(glm::vec3(0.2));
-    //        glm::mat4 translation = glm::translate(glm::vec3(x * 50, 0, y * 50));
-
-    //        loadedScenes["structure"]->Draw(translation * rotation * scale, mainDrawCtx);
-    //    }
-    //}
-
     
     glm::mat4 scale = glm::scale(glm::vec3(0.2));
     glm::mat4 translation = glm::translate(glm::vec3(0, 0, 0));
@@ -1450,6 +1437,7 @@ void VulkanEngine::UpdateScene()
     //Invert the y dir on the projectMatrix
     proj[1][1] *= -1;
 
+
     _sceneData.viewProj = proj * view;
 
     _sceneData.ambientColor = glm::vec4(ambientLight.Get());
@@ -1458,9 +1446,11 @@ void VulkanEngine::UpdateScene()
 
     auto end = std::chrono::system_clock::now();
 	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    time += elapsed.count();
 
     _sceneData.time.x = elapsed.count();
-	_sceneData.time.y = _frameNumber % 100;
+    _sceneData.time.y = _frameNumber;
+	_sceneData.time.z = time * 1e-6f;
 	_sceneData.time.w = CVAR_ShadowPCF.Get() ? 1.0f : 0.0f;
 
 	stats.sceneUpdateTime = elapsed.count() / 1000.0f;

@@ -12,6 +12,7 @@
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_vulkan.h>
+#include <stb_image.h>
 
 #include <vk_types.h>
 #include <vk_descriptors.h>
@@ -99,6 +100,7 @@ public:
 
 	bool _isInitialized{ false };
 	int _frameNumber {0};
+	long long time{ 0 };
 	bool stop_rendering{ false };
 	bool requestResize{ false };
 	VkExtent2D _windowExtent{ 1700 , 900 };
@@ -170,6 +172,7 @@ private:
 	void InitializePipelines();
 	void InitializeBackgroundPipelines();
 	void InitializeMeshPipeline();
+	void InitializeDefaultImages();
 	void InitializeDefaultData();
 	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	void InitializeImgui();
@@ -187,6 +190,8 @@ private:
 	AllocatedImage _blackImage;
 	AllocatedImage _greyImage;
 	AllocatedImage _errorImage;
+
+	AllocatedImage _noiseImage;
 
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
