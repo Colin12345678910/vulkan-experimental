@@ -1103,6 +1103,7 @@ void VulkanEngine::InitializeDefaultData()
     resources.colorImage = _whiteImage;
     resources.colorSampler = _defaultSamplerLinear;
     resources.metalRoughImage = _whiteImage;
+    resources.normalImage = _whiteImage;
 
     //Uniform buffer
     AllocatedBuffer materialConstants = CreateBuffer(
@@ -1437,12 +1438,13 @@ void VulkanEngine::UpdateScene()
     //Invert the y dir on the projectMatrix
     proj[1][1] *= -1;
 
+	_sceneData.cameraPos = glm::vec4(_camera.position, 1.0f);
 
     _sceneData.viewProj = proj * view;
 
     _sceneData.ambientColor = glm::vec4(ambientLight.Get());
     _sceneData.sunlightColor = glm::vec4(sunLight.Get());
-    _sceneData.sunlightDirection = glm::vec4(0.0f, 1.0f, 0.5f, 1.0f);
+    _sceneData.sunlightDirection = glm::normalize(glm::vec4(-CVAR_shadow_x.Get(), -CVAR_shadow_y.Get(), -CVAR_shadow_z.Get(), 0.0));
 
     auto end = std::chrono::system_clock::now();
 	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);

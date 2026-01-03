@@ -4,6 +4,7 @@ layout(set = 0, binding = 0) uniform SceneData
 	mat4 proj;
 	mat4 viewProj;
 	mat4 shadowCoord;
+	vec4 cameraPos;
 	vec4 ambientColor;
 	vec4 sunlightDirection;
 	vec4 sunlightColor;
@@ -20,3 +21,4 @@ layout (set = 1, binding = 0) uniform GLTFMaterialData
 
 layout(set = 1, binding = 1) uniform sampler2D colorTex;
 layout(set = 1, binding = 2) uniform sampler2D metalRoughTex;
+layout(set = 1, binding = 3) uniform sampler2D normalTex;

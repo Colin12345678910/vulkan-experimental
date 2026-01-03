@@ -363,6 +363,36 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 			
 		}
 
+		if (mat.normalTexture.has_value())
+		{
+			size_t img = gltf.textures[mat.normalTexture.value().textureIndex].imageIndex.value(); //Image index
+			auto samplerOptional = gltf.textures[mat.normalTexture.value().textureIndex].samplerIndex;
+			if (samplerOptional.has_value())
+			{
+				resources.colorSampler = file.samplers[samplerOptional.value()]; //Get the sampler
+			}
+			else
+			{
+				resources.colorSampler = engine->GetDefaultSampler(); //Use the default sampler if no sampler is assigned
+			}
+			resources.normalImage = images[img]; //Get the image
+		}
+
+		if (mat.pbrData.metallicRoughnessTexture.has_value())
+		{
+			size_t img = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].imageIndex.value(); //Image index
+			auto samplerOptional = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].samplerIndex;
+			if (samplerOptional.has_value())
+			{
+				resources.colorSampler = file.samplers[samplerOptional.value()]; //Get the sampler
+			}
+			else
+			{
+				resources.colorSampler = engine->GetDefaultSampler(); //Use the default sampler if no sampler is assigned
+			}
+			resources.metalRoughImage = images[img]; //Get the image
+		}
+
 		//Build
 		newMaterial->data = engine->metalRoughMaterial.WriteMaterial(engine->_device, passType, resources, file.descriptorPool);
 

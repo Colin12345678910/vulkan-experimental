@@ -21,7 +21,7 @@ vec3 offsetLookup(sampler2D map, vec4 location, vec2 offset)
 float shadowCoeff()
 {
 	float sum = 0;
-	float x, y;
+	float x, y = 0;
 	vec3 shade = shadowPos.xyz / shadowPos.w; 
 	float currentDepth = shade.z;
 	shade = shade * 0.5 + 0.5;
@@ -48,29 +48,24 @@ float shadowCoeff()
 }
 void main()
 {
-	float lightValue = max(dot(inNormal, sceneData.sunlightDirection.xyz), 0.1f);
-	lightValue = min(lightValue, 1.0f);
-	
-	vec3 shadow = shadowPos.xyz / shadowPos.w;
-	
-	float currentDepth = shadow.z;
-	
-	//shadow.y = 1 - shadow.y;
-	
-	shadow = shadow * 0.5 + 0.5;
-	
-	float shadowDepth = shadowCoeff();//texture(shadowTex, shadow.xy).x;//
-	
-	
+	vec4 metalicRoughness = texture(metalRoughTex, inUV);
+	vec3 normal = normalize(inNormal);//normalize(vec4(inNormal, 0.0) * texture(normalTex, inUV));
 	vec3 color = inColor * texture(colorTex, inUV).xyz;
-	vec3 ambient = color * sceneData.ambientColor.xyz;
-
-	//else
-	//{
-		outFragColor = vec4(color * lightValue * sceneData.sunlightColor.w + ambient, 1.0f);
-	//
-	//if (currentDepth +0.00015 < shadowDepth)
-	//{
-		outFragColor = outFragColor * shadowDepth;
-	//}
+	
+	float lightValue = max(dot(normal.xyz, sceneData.sunlightDirection.xyz), 0.0f);
+	vec3 diffuse = vec3(lightValue);
+	
+	float specularStrength = 1.0f;
+	
+	vec3 viewDir = normalize(sceneData.cameraPos.xyz - inPos.xyz);
+	vec3 reflectDir = reflect(-sceneData.sunlightDirection.xyz, normal);
+	
+	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16);
+	vec3 specular = specularStrength * spec * vec3(1.0);
+	
+	float shadowDepth = shadowCoeff();//texture(shadowTex, shadow.xy).x;
+	
+	vec3 result = color * (sceneData.ambientColor.xyz + diffuse + specular);
+	result *= shadowDepth;
+	outFragColor = vec4(result, 1.0f);
 }
