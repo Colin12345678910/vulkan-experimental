@@ -18,6 +18,16 @@ layout (set = 1, binding = 0) uniform GLTFMaterialData
 	vec4 metalRoughFactors;
 } materialData;
 
+struct Vertex 
+{
+	vec3 position;
+	float uv_x;
+	vec3 normal;
+	float uv_y;
+	vec4 color;
+	vec3 tangent;
+	float padding;
+};
 
 layout(set = 1, binding = 1) uniform sampler2D colorTex;
 layout(set = 1, binding = 2) uniform sampler2D metalRoughTex;

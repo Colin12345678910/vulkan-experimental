@@ -482,6 +482,19 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 					}
 				}
 
+				//Load tangents
+				{
+					auto tangents = primitive.findAttribute("TANGENT");
+					if (tangents != primitive.attributes.end())
+					{
+						fastgltf::Accessor& tangentAccessor = gltf.accessors[tangents->second];
+						fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, tangentAccessor, [&](glm::vec4 v, size_t index)
+						{
+							vertices[initialVert + index].tangent = glm::vec3(v.x, v.y, v.z);
+						});
+					}
+				}
+
 				if (primitive.materialIndex.has_value())
 				{
 					newSurface.material = materials[primitive.materialIndex.value()]; //Assign the material to the surface

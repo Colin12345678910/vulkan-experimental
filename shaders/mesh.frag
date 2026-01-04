@@ -1,6 +1,7 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
 #include "input_structures.glsl"
 
 layout (location = 0) in vec3 inNormal;
@@ -8,6 +9,8 @@ layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec4 shadowPos;
 layout (location = 4) in vec3 inPos;
+
+layout (location = 5) in mat3 inTBN;
 
 layout (location = 0) out vec4 outFragColor;
 
@@ -49,18 +52,20 @@ float shadowCoeff()
 void main()
 {
 	vec4 metalicRoughness = texture(metalRoughTex, inUV);
-	vec3 normal = normalize(inNormal);//normalize(vec4(inNormal, 0.0) * texture(normalTex, inUV));
+	vec3 normal = normalize(texture(normalTex, inUV) * 2.0 - 1.0).xyz;//normalize(inNormal);//normalize(vec4(inNormal, 0.0) * texture(normalTex, inUV));
+	normal = normalize(inTBN * normal);
+	
 	vec3 color = inColor * texture(colorTex, inUV).xyz;
 	
 	float lightValue = max(dot(normal.xyz, sceneData.sunlightDirection.xyz), 0.0f);
 	vec3 diffuse = vec3(lightValue);
 	
-	float specularStrength = 1.0f;
+	float specularStrength = 5.0f * metalicRoughness.b;
 	
 	vec3 viewDir = normalize(sceneData.cameraPos.xyz - inPos.xyz);
-	vec3 reflectDir = reflect(-sceneData.sunlightDirection.xyz, normal);
+	vec3 halfwayDir = normalize(sceneData.sunlightDirection.xyz + viewDir);
 	
-	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 16);
+	float spec = pow(max(dot(normal, halfwayDir), 0.0), 16 * metalicRoughness.g);
 	vec3 specular = specularStrength * spec * vec3(1.0);
 	
 	float shadowDepth = shadowCoeff();//texture(shadowTex, shadow.xy).x;

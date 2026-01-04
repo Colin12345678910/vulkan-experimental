@@ -11,14 +11,7 @@ layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec4 shadowPos;
 layout (location = 4) out vec3 outPos;
 
-struct Vertex 
-{
-	vec3 position;
-	float uv_x;
-	vec3 normal;
-	float uv_y;
-	vec4 color;
-};
+layout (location = 5) out mat3 outTBN;
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer
 {
@@ -46,8 +39,13 @@ void main()
 	
 	outPos = vec3(PushConstants.renderMatrix * position);
 	
-	outNormal = normalize(PushConstants.renderMatrix * vec4(v.normal, 0.f)).xyz;
 	outColor = v.color.xyz * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
+	
+	//Tangents
+	vec3 T = normalize(vec3(PushConstants.renderMatrix * vec4(v.tangent, 0.0)));
+	vec3 B = cross(outNormal, T);
+	
+	//mat3 outTBN = mat3(T, B, outNormal); //Tangents, Bitangents, normal matrix.
 }
