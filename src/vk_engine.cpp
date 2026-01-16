@@ -287,6 +287,8 @@ void VulkanEngine::draw()
 	//TODO: Probably move this into a optional component of a render graph?
 	if (CVAR_ScreenShot.Get())
     {
+		vkWaitForFences(_device, 1, &GetCurrentFrame()._renderFence, VK_TRUE, 1000000000);
+
         fmt::print("Taking Screenshot...\n");
 
         //DANGER
@@ -1362,7 +1364,7 @@ void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
         float shadowY = _camera.position.y + CVAR_shadow_y.Get();
         float shadowZ = _camera.position.z + CVAR_shadow_z.Get();
 
-        glm::vec3 shadowPos = _camera.position + glm::vec3(_camera.getForward()) * CVAR_shadow_scale.Get();
+        glm::vec3 shadowPos = _camera.position;
 
         glm::mat4 cameraRotation = glm::lookAt(glm::vec3(shadowX, shadowY, shadowZ), shadowPos, glm::vec3(0.0f, 1.0f, 0.0f));
 

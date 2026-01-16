@@ -192,6 +192,7 @@ private:
 	AllocatedImage _errorImage;
 
 	AllocatedImage _noiseImage;
+	AllocatedBuffer screenshotBuffer;
 
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
