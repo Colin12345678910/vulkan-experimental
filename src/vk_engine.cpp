@@ -76,6 +76,9 @@ void VulkanEngine::init()
 
     InitializeDefaultData();
 
+    static HDRI hdri;
+    hdri.LoadHDRI("../../assets/hdri/base.hdr", this);
+
     std::string structurePath = "..\\..\\assets\\Sponza.gltf"; //structure arena
 	auto structure = loadGLTF(this, structurePath);
 
@@ -629,7 +632,7 @@ void VulkanEngine::InitializeSwapchain()
     //ALlocate and create an image;
     VK_CHECK(vmaCreateImage(_allocator, &dimgInfo, &vmaImageAllocInfo, &_depthImage.image, &_depthImage.allocation, nullptr));
 
-    //Build an imageView
+    //Build an imageView 
     VkImageViewCreateInfo depthViewInfo = vkinit::imageview_create_info(_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     VK_CHECK(vkCreateImageView(_device, &depthViewInfo, nullptr, &_depthImage.imageView));
@@ -1224,30 +1227,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     //Create a descriptorSet that binds the global GPU dataBuffer
     globalDescriptor = GetCurrentFrame()._frameDescriptors.Allocate(_device, _gpuSceneDataDescriptorLayout);
     
-    /*
-    {
-        //Apply transformations so the shadowmap is looking from the light.
-        glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.0f), glm::vec3(CVAR_ortho_x.Get(), CVAR_ortho_y.Get() * 100.0f, CVAR_ortho_z.Get()));
-
-        glm::mat4 proj = glm::ortho(0.0f, 160.0f, 0.0f, 120.0f, 0.01f, 10000000.0f);
-
-        glm::quat pitchRotation = glm::angleAxis(CVAR_ortho_pitch.Get(), glm::vec3{1.0f, 0.0f, 0.0f});
-        glm::quat yawRotation = glm::angleAxis(CVAR_ortho_yaw.Get(), glm::vec3{0.0f, -1.0f, 0.0f});
-
-        
-        glm::mat4 cameraRotation = _camera.getRotation();
-
-        glm::mat4 view = glm::inverse(cameraTranslation * cameraRotation);
-        
-
-
-        //Invert the y dir on the projectMatrix
-        proj[1][1] *= -1;
-
-
-        sceneUniformData->viewProj = proj * view;
-    }
-    */
     writer
         .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
         .WriteImage(1, shadowMap.depthImage.imageView, _defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
@@ -1280,61 +1259,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     FlushDrawCtx(cmd, globalDescriptor);
 
     vkCmdEndRendering(cmd);
-
-
-//    {
-//        //Begin setting up GPUSceneData
-////Allocate a new uniform buffer
-//        AllocatedBuffer gpuSceneDataBuf = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-//        //Delete the buff later
-//        GetCurrentFrame()._deletionQueue.Push([=, this]()
-//        {
-//            DestroyBuffer(gpuSceneDataBuf);
-//        });
-//
-//        //write the Global GPU buffer
-//        GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuf.allocation->GetMappedData();
-//        *sceneUniformData = _sceneData;
-//
-//        //Probably from here we could break out rendering into a list<function> and have different renderers.
-//
-//        //Create a descriptorSet that binds the global GPU dataBuffer
-//        VkDescriptorSet globalDescriptor = GetCurrentFrame()._frameDescriptors.Allocate(_device, _gpuSceneDataDescriptorLayout);
-//
-//        VKDescriptors::DescriptorWriter writer;
-//
-//        writer
-//            .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-//            .UpdateSet(_device, globalDescriptor);
-//
-//        //Begin a render pass to our drawImage
-//        VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-//        VkRenderingAttachmentInfo depthAttachmentInfo = vkinit::depth_attachment_info(shadowMap.depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-//
-//        VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachmentInfo);
-//
-//        vkCmdBeginRendering(cmd, &renderInfo);
-//
-//        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
-//
-//        VkViewport viewport{};
-//        viewport.width = _drawExtent.width;
-//        viewport.height = _drawExtent.height;
-//        viewport.minDepth = 0.0f;
-//        viewport.maxDepth = 1.0f;
-//
-//        vkCmdSetViewport(cmd, 0, 1, &viewport);
-//
-//        VkRect2D scissor = {};
-//        scissor.extent.width = _drawExtent.width;
-//        scissor.extent.height = _drawExtent.height;
-//
-//        vkCmdSetScissor(cmd, 0, 1, &scissor);
-//
-//        FlushDrawCtx(cmd, globalDescriptor);
-//
-//        vkCmdEndRendering(cmd);
-//    }
 
     //Clear drawCTX
     mainDrawCtx.OpaqueSurfaces.clear();
@@ -1589,13 +1513,14 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
     }
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
+AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
 {
     AllocatedImage newImg;
     newImg.imageFormat = format;
     newImg.imageExtent = size;
 
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
+    imgInfo.arrayLayers = arrayLayers;
 
     if (mipmapped)
     {
@@ -1628,11 +1553,26 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     return newImg;
 }
 
-AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
+AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
 {
-    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name);
+    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name, arrayLayers);
 
-    size_t dataSize = size.depth * size.height * size.width * 4; //Image with the size, height and depth has 4 bytes per pixel;
+	size_t dataSize = 0;
+
+    switch(format)
+    {
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+            dataSize = size.depth * size.height * size.width * 4; //Image with the size, height and depth has 4 bytes per pixel;
+            break;
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+            dataSize = size.depth * size.height * size.width * 16; //Image with the size, height and depth has 16 bytes per pixel;
+            break;
+        default:
+            fmt::println("Unsupported format passed to CreateImage with data!");
+            return newImg;
+	}
+    
     AllocatedBuffer uploadBuff = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     memcpy(uploadBuff.info.pMappedData, data, dataSize);
@@ -1671,9 +1611,43 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
     return newImg;
 }
 
+AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
+{
+    AllocatedImage newImg;
+    newImg.imageFormat = format;
+    newImg.imageExtent = size;
+
+    VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
+    imgInfo.arrayLayers = 6;
+	imgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
+    if (mipmapped)
+    {
+        imgInfo.mipLevels = std::floor(std::log2(std::max(size.width, size.height))) + 1;
+    }
+
+    //Setup allocation rules
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    // allocate and create
+    VK_CHECK(vmaCreateImage(_allocator, &imgInfo, &allocInfo, &newImg.image, &newImg.allocation, nullptr));
+
+    vmaSetAllocationName(_allocator, newImg.allocation, name.c_str());
+
+    //Build the imageview
+    VkImageViewCreateInfo viewInfo = vkinit::cubeimageview_create_info(format, newImg.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
+
+    VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &newImg.imageView));
+
+    return newImg;
+}
+
 void VulkanEngine::DestroyImage(const AllocatedImage& img)
 {
-    //fmt::println("Deallocating {}", img.allocation->GetName());
+    fmt::println("Deallocating {}", img.allocation->GetName());
     vkDestroyImageView(_device, img.imageView, nullptr);
     vmaDestroyImage(_allocator, img.image, img.allocation);
 }

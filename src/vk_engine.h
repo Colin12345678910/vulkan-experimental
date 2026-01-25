@@ -26,7 +26,7 @@
 #include "VkBootstrap.h"
 #include "RenderNode.h"
 #include "ShadowMap.h"
-
+#include "HDRI.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -150,8 +150,9 @@ public:
 	AllocatedImage GetDefaultImage() { return _errorImage; }
 	VkSampler GetDefaultSampler(bool linear = true) { return linear ? _defaultSamplerLinear : _defaultSamplerNearest; }
 
-	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage");
-	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage");
+	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
+	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
+	AllocatedImage CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateCubeImage");
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	void DestroyBuffer(const AllocatedBuffer& buffer);
@@ -159,7 +160,7 @@ public:
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor, VkPipeline pipelineOverride, VkPipelineLayout pipelineLayoutOverride);
 
-
+	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	//run main loop
 	void run();
 private:
@@ -174,7 +175,6 @@ private:
 	void InitializeMeshPipeline();
 	void InitializeDefaultImages();
 	void InitializeDefaultData();
-	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	void InitializeImgui();
 	void ResizeSwapchain();
 	void DrawGeometry(VkCommandBuffer cmd);

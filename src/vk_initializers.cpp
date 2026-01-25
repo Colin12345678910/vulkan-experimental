@@ -303,6 +303,13 @@ VkImageViewCreateInfo vkinit::imageview_create_info(VkFormat format, VkImage ima
 
     return info;
 }
+VkImageViewCreateInfo vkinit::cubeimageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags)
+{
+	auto info = vkinit::imageview_create_info(format, image, aspectFlags);
+	info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    info.subresourceRange.layerCount = 6;
+    return info;
+}
 //< image_set
 VkPipelineLayoutCreateInfo vkinit::pipeline_layout_create_info()
 {
