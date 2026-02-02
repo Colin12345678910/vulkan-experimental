@@ -242,7 +242,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	}
 
 	std::vector<VKDescriptors::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { 
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3 }, //Our three images for the material
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 }, //Our three images for the material
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 }, //
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }
 	};

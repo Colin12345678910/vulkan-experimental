@@ -45,7 +45,8 @@ void main()
 	
 	//Tangents
 	vec3 T = normalize(vec3(PushConstants.renderMatrix * vec4(v.tangent, 0.0)));
+	vec3 N = normalize(vec3(PushConstants.renderMatrix * vec4(v.normal, 0.0)));
 	vec3 B = cross(outNormal, T);
 	
-	//mat3 outTBN = mat3(T, B, outNormal); //Tangents, Bitangents, normal matrix.
+	outTBN = mat3(T, B, N); //Tangents, Bitangents, normal matrix.
 }

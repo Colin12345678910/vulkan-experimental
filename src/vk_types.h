@@ -59,6 +59,7 @@ struct AllocatedImage
     VmaAllocation allocation;
     VkExtent3D imageExtent;
     VkFormat imageFormat;
+    std::vector<VkImageView> mipMapViews;
     bool deallocated = false;
 };
 struct AllocatedBuffer

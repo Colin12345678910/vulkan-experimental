@@ -147,6 +147,9 @@ void main()
 	vec3 kS = F;
 	vec3 kD = vec3(1.0) - kS;
 	kD *= 1.0 - metallic;
+	vec3 irradiance = texture(irradianceImage, normal).rgb;
+	vec3 diffuse = irradiance * albedo;
+	vec3 ambient = (kD * diffuse) * ao;
 
 	//Normal * LightDir
 	float NdotL = max(dot(normal, L), 0.0);
@@ -158,9 +161,7 @@ void main()
 	Lo += shadowDepth * (kD * albedo / PI + specular) * radiance * NdotL; //Add light
 
 	//Add skylight ambient.
-	vec3 skyCol = vec3(0.35, 0.46, 0.6);
-	float up = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
-	vec3 skyLight = skyCol * albedo * up * 0.2;
+	vec3 skyLight = ambient;
 
 	vec3 col = skyLight + Lo;
 	col /= (col + vec3(1.0));

@@ -1,0 +1,44 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform sampler2D environmentMap;
+layout(rgba32f,set = 0, binding = 1) uniform imageCube irradianceImage;
+layout(set = 0, binding = 2) uniform PushConstants
+{
+    float roughness;
+    int mipLevel;
+}pushConstants;
+
+#include "math.glsl"
+
+void main()
+{
+    uint face = gl_GlobalInvocationID.z; //Cube face
+    vec2 uv = (gl_GlobalInvocationID.xy + 0.5) / imageSize(irradianceImage).xy;
+
+    vec3 normal = GetNormal(face, uv);
+    vec3 R = normal;
+    vec3 V = R;
+
+    const uint SAMPLE_COUNT = 128;
+    float totalWeight = 0.0f;
+    vec3 prefilteredColour = vec3(0.0);
+
+    for(int i = 0; i < SAMPLE_COUNT; ++i)
+    {
+        vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+        vec3 H  = ImportanceSampleGGX(Xi, normal, pushConstants.roughness);
+        vec3 L = normalize(2.0 * dot(V, H) * H - V);
+
+        float NdotL = max(dot(normal, L), 0.0);
+
+        if (NdotL > 0.0)
+        {
+            prefilteredColour += texture(environmentMap, SampleSphericalMap(L)).rgb * NdotL;
+            totalWeight += NdotL;
+        }
+    }
+
+    prefilteredColour = prefilteredColour / totalWeight;
+    
+    imageStore(irradianceImage, ivec3(gl_GlobalInvocationID.xy, face), vec4(prefilteredColour, 1.0));
+}

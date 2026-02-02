@@ -33,6 +33,8 @@ struct GLTFMetallicRoughness
 		VkSampler colorSampler;
 		AllocatedImage metalRoughImage;
 		AllocatedImage normalImage;
+		AllocatedImage irradianceImage;
+		AllocatedImage reserved;
 		VkBuffer dataBuffer;
 		uint32_t dataBufferOffset;
 	};

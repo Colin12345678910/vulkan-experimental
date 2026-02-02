@@ -11,10 +11,18 @@ class VulkanEngine;
 class HDRI
 {
 public:
-	AllocatedImage hdrImage;
 	VkSampler hdrSampler;
-	AllocatedImage radianceCubemap;
 	VkSampler radianceSampler;
-
+	AllocatedImage irradiance;
+	AllocatedImage prefilteredEnvMap;
+	AllocatedImage brdfLUT;
 	bool LoadHDRI(const char* filepath, VulkanEngine* engine);
+private:
+	AllocatedImage hdrImage;
+	bool GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath);
+	bool GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath);
+	bool GenerateBRDFLUT(VulkanEngine* engine);
+	bool WriteHDRIToDisk(const char* filepath);
+	bool WriteBinToDisk(AllocatedImage img, const char* filepath);
+	AllocatedImage CreateImageFromDisk(const char* filepath, VulkanEngine* engine, bool mipmapped = false, bool cubed = false);
 };

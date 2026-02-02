@@ -23,7 +23,7 @@
 #include <GLTFMetalicRoughness.h>
 
 #include "camera.h"
-#include "VkBootstrap.h"
+#include <VkBootstrap.h>
 #include "RenderNode.h"
 #include "ShadowMap.h"
 #include "HDRI.h"
@@ -149,6 +149,7 @@ public:
 
 	AllocatedImage GetDefaultImage() { return _errorImage; }
 	VkSampler GetDefaultSampler(bool linear = true) { return linear ? _defaultSamplerLinear : _defaultSamplerNearest; }
+	HDRI GetCurrentHDRI() { return hdri; }
 
 	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
 	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
@@ -193,6 +194,8 @@ private:
 
 	AllocatedImage _noiseImage;
 	AllocatedBuffer screenshotBuffer;
+
+	HDRI hdri;
 
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 

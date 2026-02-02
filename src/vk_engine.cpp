@@ -22,8 +22,67 @@
 #include <glm/ext/matrix_clip_space.hpp>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
+#include <fmt/color.h>
 
 using namespace vkutil;
+
+const fmt::color GetColorSeverity(VkDebugUtilsMessageSeverityFlagBitsEXT s) {
+    switch (s) {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+        return fmt::color::gray;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+        return fmt::color::red;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+        return fmt::color::yellow;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+        return fmt::color::cyan;
+    default:
+        return fmt::color::white;
+    }
+}
+
+const char* StringMessageSeverity(VkDebugUtilsMessageSeverityFlagBitsEXT s) {
+    switch (s) {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+        return "VERBOSE";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+        return "ERROR";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+        return "WARNING";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+        return "INFO";
+    default:
+        return "UNKNOWN";
+    }
+}
+const char* StringMessageType(VkDebugUtilsMessageTypeFlagsEXT s) {
+    if (s == 7) return "General | Validation | Performance";
+    if (s == 6) return "Validation | Performance";
+    if (s == 5) return "General | Performance";
+    if (s == 4 /*VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT*/) return "Performance";
+    if (s == 3) return "General | Validation";
+    if (s == 2 /*VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT*/) return "Validation";
+    if (s == 1 /*VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT*/) return "General";
+    return "Unknown";
+}
+
+// Default debug messenger
+// Feel free to copy-paste it into your own code, change it as needed, then call `set_debug_callback()` to use that instead
+VKAPI_ATTR VkBool32 VKAPI_CALL Debug_CallBack(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+    void*) {
+    auto ms = StringMessageSeverity(messageSeverity);
+    auto mt = StringMessageType(messageType);
+    fmt::print(fmt::fg(GetColorSeverity(messageSeverity)), "[{}]: {}\n{}\n", ms, mt, pCallbackData->pMessage);
+
+    if (messageType != 4) {
+        __debugbreak();
+	}
+
+    return VK_FALSE; // Applications must return false here
+}
+
 
 #if NDEBUG
 const bool USE_VALIDATION = false;
@@ -38,6 +97,8 @@ AutoBoolCVar CVAR_ShadowPCF("shadow.PCF", "Enables PCF", false);
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 void VulkanEngine::init()
 {
+	// Ensure that Renderdoc or other tools can hook in before we initialize Vulkan
+	std::this_thread::sleep_for(std::chrono::milliseconds(10));
     // only one engine initialization is allowed with the application.
     assert(loadedEngine == nullptr);
     loadedEngine = this;
@@ -74,10 +135,9 @@ void VulkanEngine::init()
 
     InitializeImgui();
 
-    InitializeDefaultData();
-
-    static HDRI hdri;
     hdri.LoadHDRI("../../assets/hdri/base.hdr", this);
+
+    InitializeDefaultData();
 
     std::string structurePath = "..\\..\\assets\\Sponza.gltf"; //structure arena
 	auto structure = loadGLTF(this, structurePath);
@@ -506,7 +566,7 @@ void VulkanEngine::InitializeVulkan()
     //Make the vulkan instance with basic Debug.
     auto instanceConfig = builder.set_app_name("Example Vulkan Application")
         .request_validation_layers(USE_VALIDATION)
-        .use_default_debug_messenger()
+        .set_debug_callback(Debug_CallBack)
         .require_api_version(1, 3, 0)
         .build();
 
@@ -876,6 +936,7 @@ void VulkanEngine::InitializeBackgroundPipelines()
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function)
 { 
+    VK_CHECK(vkWaitForFences(_device, 1, &_immediateFence, VK_TRUE, UINT64_MAX));
     VK_CHECK(vkResetFences(_device, 1, &_immediateFence));
     VK_CHECK(vkResetCommandBuffer(_immediateCommandBuffer, 0));
 
@@ -1130,7 +1191,7 @@ void VulkanEngine::InitializeDefaultData()
     resources.dataBuffer = materialConstants.buffer;
     resources.dataBufferOffset = 0;
 
-    defaultMaterial = metalRoughMaterial.WriteMaterial(_device, MaterialPass::MainColor, resources, globalDescriptiorAllocator);
+    //defaultMaterial = metalRoughMaterial.WriteMaterial(_device, MaterialPass::MainColor, resources, globalDescriptiorAllocator);
 
 //    for (auto& m : testMeshes)
 //    {
@@ -1642,12 +1703,31 @@ AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, V
 
     VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &newImg.imageView));
 
+    if (mipmapped)
+    {
+        auto viewInfo = vkinit::cubeimageview_create_info(format, newImg.image, VK_IMAGE_ASPECT_COLOR_BIT);
+        newImg.mipMapViews.resize(imgInfo.mipLevels);
+        for (int i = 0; i < imgInfo.mipLevels; i++)
+        {
+            viewInfo.subresourceRange.levelCount = imgInfo.mipLevels - i;
+            viewInfo.subresourceRange.baseMipLevel = i;
+            vkCreateImageView(_device, &viewInfo, nullptr, &newImg.mipMapViews[i]);
+        }
+    }
+
     return newImg;
 }
 
 void VulkanEngine::DestroyImage(const AllocatedImage& img)
 {
     fmt::println("Deallocating {}", img.allocation->GetName());
+    if (img.mipMapViews.size() > 0)
+    {
+        for (auto& view : img.mipMapViews)
+        {
+            vkDestroyImageView(_device, view, nullptr);
+        }
+	}
     vkDestroyImageView(_device, img.imageView, nullptr);
     vmaDestroyImage(_allocator, img.image, img.allocation);
 }
