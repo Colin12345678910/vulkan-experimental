@@ -59,8 +59,37 @@ struct AllocatedImage
     VmaAllocation allocation;
     VkExtent3D imageExtent;
     VkFormat imageFormat;
+	VkImageCreateFlagBits imageFlags;
     std::vector<VkImageView> mipMapViews;
     bool deallocated = false;
+
+    int GetMipLevels() const
+    {
+        return std::log2(imageExtent.width);
+	}
+    uint32_t GetSize()
+    {
+		uint32_t dataSize = 0;
+        switch (imageFormat)
+        {
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+            dataSize = imageExtent.depth * imageExtent.height * imageExtent.width * 4; //Image with the size, height and depth has 4 bytes per pixel;
+            break;
+        case VK_FORMAT_R32G32B32A32_SFLOAT:
+            dataSize = imageExtent.depth * imageExtent.height * imageExtent.width * 16; //Image with the size, height and depth has 16 bytes per pixel;
+            break;
+        default:
+            fmt::println("Unsupported format passed to CreateImage with data!");
+        }
+
+        if (imageFlags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT)
+        {
+            dataSize *= 6;
+		}
+
+        return dataSize;
+    }
 };
 struct AllocatedBuffer
 {

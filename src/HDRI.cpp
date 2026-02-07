@@ -2,21 +2,13 @@
 #include "vk_engine.h"
 #include <stb_image_write.h>
 
+const std::string HDRI_CACHE_PATH = "../../cache/";
+const std::string HDRI_IRRADIANCE_FILE = HDRI_CACHE_PATH + "irradiance.bin";
+const std::string HDRI_PREFILTERED_FILE = HDRI_CACHE_PATH + "prefilteredEnvMap.bin";
+const std::string HDRI_BRDFLUT_FILE = HDRI_CACHE_PATH + "brdfLUT.bin";
+
 bool HDRI::LoadHDRI(const char* filepath, VulkanEngine* engine)
 {
-	// TODO: Check for existing cached files
-	/*
-	if (std::filesystem::exists("irradiance.bin") &&
-		std::filesystem::exists("prefilteredEnvMap.bin") &&
-		std::filesystem::exists("brdfLUT.bin"))
-	{
-		irradiance = CreateImageFromDisk("irradiance.bin", engine, false, true);
-		brdfLUT = CreateImageFromDisk("brdfLUT.bin", engine);
-		prefilteredEnvMap = CreateImageFromDisk("prefilteredEnvMap.bin", engine, true, true);
-		return true;
-	};
-	*/ // I'm stuck here mostly bc I never expected to need cubemaps cached to disk, and didn't implement it, definitely kicking myself now. But this gives me the excuse to actually rewrite how textures are handled so, yeah.
-
 	int w, h, n;
 	float* data = stbi_loadf(filepath, &w, &h, &n, 4);
 	hdrImage = engine->CreateImage(data, VkExtent3D{ (uint32_t)w, (uint32_t)h, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
@@ -27,13 +19,45 @@ bool HDRI::LoadHDRI(const char* filepath, VulkanEngine* engine)
 	});
 	stbi_image_free(data);
 
-	GenerateRadianceCubemap(engine, filepath);
-	GeneratePrefilteredEnvMap(engine, filepath);
-	GenerateBRDFLUT(engine);
 
-	WriteBinToDisk(irradiance, "irradiance.bin");
-	WriteBinToDisk(prefilteredEnvMap, "prefilteredEnvMap.bin");
-	WriteBinToDisk(brdfLUT, "brdfLUT.bin");
+	if (std::filesystem::exists(HDRI_IRRADIANCE_FILE))
+	{
+		irradiance = CreateImageFromDisk(HDRI_IRRADIANCE_FILE.c_str(), engine, false, true);
+		
+	}
+	else
+	{
+		GenerateRadianceCubemap(engine, filepath);
+		WriteBinToDisk(irradiance, HDRI_IRRADIANCE_FILE.c_str(), true);
+	}
+
+	if (std::filesystem::exists(HDRI_PREFILTERED_FILE))
+	{
+		prefilteredEnvMap = CreateImageFromDisk(HDRI_PREFILTERED_FILE.c_str(), engine, true, true);
+	}
+	else
+	{
+		GeneratePrefilteredEnvMap(engine, filepath);
+		WriteBinToDisk(prefilteredEnvMap, HDRI_PREFILTERED_FILE.c_str(), true);
+	}
+
+	if (std::filesystem::exists(HDRI_BRDFLUT_FILE))
+	{
+		brdfLUT = CreateImageFromDisk(HDRI_BRDFLUT_FILE.c_str(), engine);
+	}
+	else
+	{
+		GenerateBRDFLUT(engine);
+		WriteBinToDisk(brdfLUT, HDRI_BRDFLUT_FILE.c_str());
+	}
+	// I'm stuck here mostly bc I never expected to need cubemaps cached to disk, and didn't implement it, definitely kicking myself now. But this gives me the excuse to actually rewrite how textures are handled so, yeah.
+
+	engine->_mainDeletionQueue.Push([=]() {
+		engine->DestroyImage(irradiance);
+		engine->DestroyImage(brdfLUT);
+		engine->DestroyImage(prefilteredEnvMap);
+	});
+	
 	return true;
 }
 
@@ -49,11 +73,7 @@ bool HDRI::GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath)
 
 	//Create the cubemap image, R32 format as this is HDR data.
 	irradiance = engine->CreateCubeImage(VkExtent3D{ SIZE, SIZE, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
-		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, false, "HDRI::irradiance");
-
-	engine->_mainDeletionQueue.Push([=]() {
-		engine->DestroyImage(irradiance);
-	});
+		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false, "HDRI::irradiance");
 
 	VkShaderModule computeShader;
 	if (!vkutil::LoadShaderModule("../../shaders/convolution.comp.spv", engine->_device, &computeShader))
@@ -126,10 +146,6 @@ bool HDRI::GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath)
 
 	prefilteredEnvMap = engine->CreateCubeImage(VkExtent3D{ SIZE, SIZE, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, true, "HDRI::prefilteredEnvMap");
-
-	engine->_mainDeletionQueue.Push([=]() {
-		engine->DestroyImage(prefilteredEnvMap);
-	});
 
 	VkShaderModule computeShader;
 	if (!vkutil::LoadShaderModule("../../shaders/prefilter.comp.spv", engine->_device, &computeShader))
@@ -238,10 +254,6 @@ bool HDRI::GenerateBRDFLUT(VulkanEngine* engine)
 	brdfLUT = engine->CreateImage(VkExtent3D{ (uint32_t)SIZE, (uint32_t)SIZE, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false, "HDRI::BRDFLUT");
 
-	engine->_mainDeletionQueue.Push([=]() {
-		engine->DestroyImage(brdfLUT);
-	});
-
 	// Create compute shader
 	VkShaderModule computeShader;
 	if (!vkutil::LoadShaderModule("../../shaders/BDRF.comp.spv", engine->_device, &computeShader))
@@ -303,68 +315,44 @@ bool HDRI::GenerateBRDFLUT(VulkanEngine* engine)
 	return true;
 }
 
-bool HDRI::WriteHDRIToDisk(const char* filepath)
+bool HDRI::WriteBinToDisk(AllocatedImage img, const char* filepath, bool isCubemap)
 {
-	WriteBinToDisk(irradiance, "irradiance.bin");
-	WriteBinToDisk(brdfLUT, "brdfLUT.bin");
-	WriteBinToDisk(prefilteredEnvMap, "prefilteredEnvMap.bin");
+	int size = img.imageExtent.width * img.imageExtent.height * img.imageExtent.depth * 4 * sizeof(float);
 
-	return true;
-}
+	if (isCubemap)
+	{
+		size *= 6;
+	}
+	int layers = isCubemap == true ? 6 : 1;
 
-bool HDRI::WriteBinToDisk(AllocatedImage img, const char* filepath)
-{
-	int offset = 0;
-
-	auto buff = VulkanEngine::Get().CreateBuffer(img.imageExtent.width * img.imageExtent.height * 4 * sizeof(float),
+	auto buff = VulkanEngine::Get().CreateBuffer(size,
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
 
-	VulkanEngine::Get().ImmediateSubmit([&](VkCommandBuffer cmd) {
-		vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-		vkutil::CopyImageToBuffer(cmd, img.image, buff.buffer, img.imageExtent);
-		vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	});
+	std::ofstream file(filepath, std::ios::binary | std::ios::app);
 
-	void* data;
-	vmaMapMemory(VulkanEngine::Get()._allocator, buff.allocation, (void**)&data);
-
-	std::ofstream file(filepath, std::ios::binary);
-
-	int size = img.imageExtent.width * img.imageExtent.height * 4 * sizeof(float);
-
-	file.write(reinterpret_cast<char*>(data), size);
-
-	vmaUnmapMemory(VulkanEngine::Get()._allocator, buff.allocation);
-
-	offset += size;
-
-	for (int i = 1; i < img.mipMapViews.size(); i++)
+	for(int mip = 0; mip < img.mipMapViews.size(); mip++)
 	{
-		auto extent = VkExtent3D{
-			std::max(1u, img.imageExtent.width >> i),
-			std::max(1u, img.imageExtent.height >> i),
-			1
-		};
-		int size = extent.width * extent.height * 4 * sizeof(float);
+		int mipWidth = img.imageExtent.width >> mip;
+		int mipHeight = img.imageExtent.height >> mip;
+		assert(mipWidth > 0 || mipHeight > 0);
+
+		size = mipWidth * mipHeight * img.imageExtent.depth * 4 * sizeof(float) * (isCubemap == true ? 6 : 1);
+		assert(size > 0);
 
 		VulkanEngine::Get().ImmediateSubmit([&](VkCommandBuffer cmd) {
-			vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-			vkutil::CopyImageToBuffer(cmd, img.image, buff.buffer, extent);
-			vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_NONE);
+			vkutil::CopyImageToBuffer(cmd, img.image, buff.buffer, VkExtent3D{ (uint32_t)mipWidth, (uint32_t)mipHeight, img.imageExtent.depth }, mip, layers);
+			vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_NONE);
 		});
 
 		void* data;
-
 		vmaMapMemory(VulkanEngine::Get()._allocator, buff.allocation, (void**)&data);
 
-		std::ofstream file(filepath, std::ios::binary);
-
-		file.write(reinterpret_cast<char*>(data) + offset, offset + size);
-		offset += size;
+		file.write(reinterpret_cast<char*>(data), size);
 
 		vmaUnmapMemory(VulkanEngine::Get()._allocator, buff.allocation);
 	}
-
+	
 	VulkanEngine::Get().DestroyBuffer(buff);
 	
 	return false;
@@ -383,16 +371,22 @@ AllocatedImage HDRI::CreateImageFromDisk(const char* filepath, VulkanEngine* eng
 
 	AllocatedImage img;
 
+	fmt::print("Loading HRDI image from disk: {}, size: {}\n", filepath, size);
+
 	if (cubed)
 	{
-		img = engine->CreateCubeImage(VkExtent3D{ imgSize, imgSize, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
+		img = engine->CreateCubeImage(buffer.data(), VkExtent3D{ imgSize, imgSize, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath, size);
 	}
 	else
 	{
 		img = engine->CreateImage(buffer.data(), VkExtent3D{ imgSize, imgSize, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
 	}
+
+	//engine->ImmediateSubmit([=](VkCommandBuffer cmd) {
+	//	vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//});
 
 	return img;
 }

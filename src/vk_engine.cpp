@@ -1579,6 +1579,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     AllocatedImage newImg;
     newImg.imageFormat = format;
     newImg.imageExtent = size;
+	newImg.imageFlags = VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT;
 
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
     imgInfo.arrayLayers = arrayLayers;
@@ -1618,45 +1619,10 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
 {
     AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name, arrayLayers);
 
-	size_t dataSize = 0;
-
-    switch(format)
-    {
-        case VK_FORMAT_R8G8B8A8_UNORM:
-        case VK_FORMAT_B8G8R8A8_UNORM:
-            dataSize = size.depth * size.height * size.width * 4; //Image with the size, height and depth has 4 bytes per pixel;
-            break;
-        case VK_FORMAT_R32G32B32A32_SFLOAT:
-            dataSize = size.depth * size.height * size.width * 16; //Image with the size, height and depth has 16 bytes per pixel;
-            break;
-        default:
-            fmt::println("Unsupported format passed to CreateImage with data!");
-            return newImg;
-	}
-    
-    AllocatedBuffer uploadBuff = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    memcpy(uploadBuff.info.pMappedData, data, dataSize);
-
+	CopyDataToImage(data, newImg);
+	
     ImmediateSubmit([&](VkCommandBuffer cmd)
     {
-        vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); //Transition our image into one that can be written to.
-
-        VkBufferImageCopy copyRegion{};
-        copyRegion.bufferOffset = 0;
-        copyRegion.bufferRowLength = 0;
-        copyRegion.bufferImageHeight = 0;
-
-        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copyRegion.imageSubresource.mipLevel = 0;
-        copyRegion.imageSubresource.baseArrayLayer = 0;
-        copyRegion.imageSubresource.layerCount = 1;
-        copyRegion.imageExtent = size;
-
-        //Copy the buff into the image
-
-        vkCmdCopyBufferToImage(cmd, uploadBuff.buffer, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-
         if (mipmapped)
         {
             vkutil::GenerateMipmaps(cmd, newImg.image, VkExtent2D(newImg.imageExtent.width, newImg.imageExtent.height));
@@ -1667,8 +1633,6 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
         }
     });
 
-    DestroyBuffer(uploadBuff);
-
     return newImg;
 }
 
@@ -1677,10 +1641,11 @@ AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, V
     AllocatedImage newImg;
     newImg.imageFormat = format;
     newImg.imageExtent = size;
+    newImg.imageFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
     imgInfo.arrayLayers = 6;
-	imgInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	imgInfo.flags = newImg.imageFlags;
 
     if (mipmapped)
     {
@@ -1716,6 +1681,89 @@ AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, V
     }
 
     return newImg;
+}
+
+AllocatedImage VulkanEngine::CreateCubeImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, uint32_t dataSize)
+{
+	AllocatedImage newImg = CreateCubeImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name);
+    dataSize = dataSize = 0 ? size.depth * size.height * size.width * 16 * 6 : dataSize;
+
+	fmt::println("Uploading cube map with data size of {} bytes", dataSize);
+
+	int mips = newImg.mipMapViews.size() > 0 ? newImg.mipMapViews.size() : 1;
+
+    for (int mip = 0; mip < mips; mip++)
+    {
+        for (int i = 0; i < 6; i++)
+        {
+            fmt::println("Copying face {} mip {}", i, mip);
+            CopyDataToImage(data, newImg, mip, i, dataSize);
+        }
+    }
+
+	fmt::println("Transitioning cube map to shader read only...");
+    ImmediateSubmit([=](VkCommandBuffer cmd) {
+        vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
+    return newImg;
+}
+
+AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int mip, int face, uint32_t fileSize)
+{
+    VkExtent3D size =
+    {
+		std::max(img.imageExtent.width >> mip, 1u),
+        std::max(img.imageExtent.height >> mip, 1u),
+		img.imageExtent.depth
+    };
+    uint32_t dataSize = img.GetSize();
+    
+    if (fileSize == 0) { fileSize = dataSize; }
+    
+    AllocatedBuffer uploadBuff = CreateBuffer(fileSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    memcpy(uploadBuff.info.pMappedData, data, fileSize);
+
+	//fmt::println("Successfully copied {} bytes to upload staging buffer", dataSize);
+
+    if (fileSize != dataSize)
+    {
+        // We have additional mips to draw from the file.
+    }
+    ImmediateSubmit([&](VkCommandBuffer cmd)
+    {
+        vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); //Transition our image into one that can be written to.
+
+        int const BPP = 16; //Bytes per pixel, RGBA32F, this will be derived later.
+        int offset = 0;
+        for(int m = 0; m < mip; m++)
+        {
+			offset += (img.imageExtent.width >> m) * (img.imageExtent.height >> m) * 1 * BPP * 6;
+        }
+
+		uint32_t sizePerFace = size.width * size.height * BPP;
+
+        VkBufferImageCopy copyRegion{};
+        copyRegion.bufferOffset = offset + (face * sizePerFace);
+        copyRegion.bufferRowLength = 0;
+        copyRegion.bufferImageHeight = 0;
+
+        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.imageSubresource.mipLevel = mip;
+        copyRegion.imageSubresource.baseArrayLayer = face;
+        copyRegion.imageSubresource.layerCount = 1;
+        copyRegion.imageExtent = size;
+
+        //Copy the buff into the image
+
+        vkCmdCopyBufferToImage(cmd, uploadBuff.buffer, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+    });
+
+	//fmt::println("Successfully copied buffer to image");
+
+    DestroyBuffer(uploadBuff);
+
+    return img;
 }
 
 void VulkanEngine::DestroyImage(const AllocatedImage& img)

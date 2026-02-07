@@ -22,7 +22,6 @@ private:
 	bool GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath);
 	bool GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath);
 	bool GenerateBRDFLUT(VulkanEngine* engine);
-	bool WriteHDRIToDisk(const char* filepath);
-	bool WriteBinToDisk(AllocatedImage img, const char* filepath);
+	bool WriteBinToDisk(AllocatedImage img, const char* filepath, bool isCubemap = false);
 	AllocatedImage CreateImageFromDisk(const char* filepath, VulkanEngine* engine, bool mipmapped = false, bool cubed = false);
 };

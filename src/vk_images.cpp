@@ -3,7 +3,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, VkImageAspectFlagBits flags)
+void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, VkImageAspectFlagBits flags, int mip, int layers)
 {
     VkImageMemoryBarrier2 imageBarrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
     imageBarrier.pNext = nullptr;
@@ -24,6 +24,17 @@ void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout c
     imageBarrier.subresourceRange = vkinit::image_subresource_range(aspectMask);
     imageBarrier.image = image;
 
+    if (mip != 0)
+    {
+        imageBarrier.subresourceRange.baseMipLevel = 0;
+		imageBarrier.subresourceRange.levelCount = mip;
+    }
+    if (layers != 0)
+    {
+		imageBarrier.subresourceRange.baseArrayLayer = 0;
+		imageBarrier.subresourceRange.layerCount = layers;
+    }
+
     VkDependencyInfo depInfo{};
     depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
     depInfo.pNext = nullptr;
@@ -34,8 +45,12 @@ void vkutil::TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout c
     vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-void vkutil::CopyImageToBuffer(VkCommandBuffer cmd, VkImage source, VkBuffer destination, VkExtent2D srcSize, int mip)
+void vkutil::CopyImageToBuffer(VkCommandBuffer cmd, VkImage source, VkBuffer destination, VkExtent2D srcSize, int mip, int layers)
 {
+    VkExtent2D actualSize = {
+        std::max(1u, srcSize.width >> mip),
+        std::max(1u, srcSize.height >> mip)
+	};
     VkBufferImageCopy copyRegion{};
     copyRegion.bufferOffset = 0;
     copyRegion.bufferRowLength = 0;
@@ -43,16 +58,16 @@ void vkutil::CopyImageToBuffer(VkCommandBuffer cmd, VkImage source, VkBuffer des
     copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     copyRegion.imageSubresource.mipLevel = mip;
     copyRegion.imageSubresource.baseArrayLayer = 0;
-    copyRegion.imageSubresource.layerCount = 1;
-    copyRegion.imageExtent.width = srcSize.width;
-    copyRegion.imageExtent.height = srcSize.height;
+    copyRegion.imageSubresource.layerCount = layers;
+    copyRegion.imageExtent.width = actualSize.width;
+    copyRegion.imageExtent.height = actualSize.height;
     copyRegion.imageExtent.depth = 1;
     vkCmdCopyImageToBuffer(cmd, source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, destination, 1, &copyRegion);
 }
 
-void vkutil::CopyImageToBuffer(VkCommandBuffer cmd, VkImage source, VkBuffer destination, VkExtent3D srcSize, int mip)
+void vkutil::CopyImageToBuffer(VkCommandBuffer cmd, VkImage source, VkBuffer destination, VkExtent3D srcSize, int mip, int layers)
 {
-	vkutil::CopyImageToBuffer(cmd, source, destination, VkExtent2D{ srcSize.width, srcSize.height }, mip);
+	vkutil::CopyImageToBuffer(cmd, source, destination, VkExtent2D{ srcSize.width, srcSize.height }, mip, layers);
 }
 
 void vkutil::CopyImageToImage(VkCommandBuffer cmd, VkImage source, VkImage destination, VkExtent2D srcSize, VkExtent2D dstSize)

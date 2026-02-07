@@ -19,7 +19,7 @@ void main()
     vec3 R = normal;
     vec3 V = R;
 
-    const uint SAMPLE_COUNT = 128;
+    const uint SAMPLE_COUNT = 1024;
     float totalWeight = 0.0f;
     vec3 prefilteredColour = vec3(0.0);
 

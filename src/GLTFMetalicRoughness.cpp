@@ -136,7 +136,7 @@ MaterialInstance GLTFMetallicRoughness::WriteMaterial(VkDevice device, MaterialP
         .WriteImage(2, resources.metalRoughImage.imageView, resources.colorSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 		.WriteImage(3, resources.normalImage.imageView, resources.colorSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
         .WriteImage(4, VulkanEngine::Get().GetCurrentHDRI().irradiance.imageView, VulkanEngine::Get().GetDefaultSampler(true), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-        .WriteImage(5, VulkanEngine::Get().GetCurrentHDRI().irradiance.imageView, VulkanEngine::Get().GetDefaultSampler(true), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+        .WriteImage(5, VulkanEngine::Get().GetCurrentHDRI().prefilteredEnvMap.imageView, VulkanEngine::Get().GetDefaultSampler(true), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
         .WriteImage(6, VulkanEngine::Get().GetCurrentHDRI().brdfLUT.imageView, VulkanEngine::Get().GetDefaultSampler(true), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
         .UpdateSet(device, matInstance.materialSet);
 
