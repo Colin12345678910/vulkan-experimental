@@ -35,6 +35,7 @@ add_library(vk_core STATIC
   IRenderpass.h
   HDRI.cpp
   HDRI.h
+  Tbin.h
 )
 
 function(setup executable) #Basically just assign the correct CXX standards.

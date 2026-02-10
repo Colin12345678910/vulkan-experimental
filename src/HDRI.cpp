@@ -1,4 +1,5 @@
 #include "HDRI.h"
+#include "TBin.h"
 #include "vk_engine.h"
 #include <stb_image_write.h>
 
@@ -328,10 +329,17 @@ bool HDRI::WriteBinToDisk(AllocatedImage img, const char* filepath, bool isCubem
 	auto buff = VulkanEngine::Get().CreateBuffer(size,
 		VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
 
-	std::ofstream file(filepath, std::ios::binary | std::ios::app);
+	//std::ofstream file(filepath, std::ios::binary | std::ios::app);
 
-	for(int mip = 0; mip < img.mipMapViews.size(); mip++)
+	TBin::TBinBuilder builder;
+
+	int numMips = (int)img.mipMapViews.size();
+	numMips = std::max(1, numMips);
+
+	for(int mip = 0; mip < numMips; mip++)
 	{
+		std::string mipFilepath = std::string(filepath) + "_mip" + std::to_string(mip);
+		std::ofstream file(mipFilepath, std::ios::binary | std::ios::app);
 		int mipWidth = img.imageExtent.width >> mip;
 		int mipHeight = img.imageExtent.height >> mip;
 		assert(mipWidth > 0 || mipHeight > 0);
@@ -341,17 +349,19 @@ bool HDRI::WriteBinToDisk(AllocatedImage img, const char* filepath, bool isCubem
 
 		VulkanEngine::Get().ImmediateSubmit([&](VkCommandBuffer cmd) {
 			vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_NONE);
-			vkutil::CopyImageToBuffer(cmd, img.image, buff.buffer, VkExtent3D{ (uint32_t)mipWidth, (uint32_t)mipHeight, img.imageExtent.depth }, mip, layers);
+			vkutil::CopyImageToBuffer(cmd, img.image, buff.buffer, VkExtent3D{ (uint32_t)img.imageExtent.width, (uint32_t)img.imageExtent.height, img.imageExtent.depth }, mip, layers);
 			vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_NONE);
 		});
 
 		void* data;
 		vmaMapMemory(VulkanEngine::Get()._allocator, buff.allocation, (void**)&data);
 
-		file.write(reinterpret_cast<char*>(data), size);
+		builder.addFile(data, size);
 
 		vmaUnmapMemory(VulkanEngine::Get()._allocator, buff.allocation);
 	}
+
+	builder.build(filepath);
 	
 	VulkanEngine::Get().DestroyBuffer(buff);
 	
@@ -361,32 +371,36 @@ bool HDRI::WriteBinToDisk(AllocatedImage img, const char* filepath, bool isCubem
 //Unused for now.
 AllocatedImage HDRI::CreateImageFromDisk(const char* filepath, VulkanEngine* engine, bool mipmapped, bool cubed)
 {
-	uint32_t imgSize = 512;
-	uint32_t fileSize = imgSize * imgSize * 4 * sizeof(float);
-	// Load the HDRI maps from disk if possible
-	int size = std::filesystem::file_size(filepath);
-	std::ifstream file(filepath, std::ios::binary);
-	std::vector<char> buffer(size);
-	file.read(buffer.data(), std::streamsize(size));
+	TBin::TBinReader reader;
 
-	AllocatedImage img;
-
-	fmt::print("Loading HRDI image from disk: {}, size: {}\n", filepath, size);
-
-	if (cubed)
+	if (reader.load(filepath))
 	{
-		img = engine->CreateCubeImage(buffer.data(), VkExtent3D{ imgSize, imgSize, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath, size);
-	}
-	else
-	{
-		img = engine->CreateImage(buffer.data(), VkExtent3D{ imgSize, imgSize, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
-			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
+		uint32_t imgSize = 512;
+		uint32_t fileSize = imgSize * imgSize * 4 * sizeof(float);
+		// Load the HDRI maps from disk if possible
+		int size = std::filesystem::file_size(filepath);
+
+		AllocatedImage img;
+
+		fmt::print("Loading HRDI image from disk: {}, size: {}\n", filepath, size);
+
+		if (cubed)
+		{
+			img = engine->CreateCubeImage(reader.GetFileData(), VkExtent3D{imgSize, imgSize, 1}, VK_FORMAT_R32G32B32A32_SFLOAT,
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
+		}
+		else
+		{
+			img = engine->CreateImage(reader.files[0].data.data(), VkExtent3D{imgSize, imgSize, 1}, VK_FORMAT_R32G32B32A32_SFLOAT,
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
+		}
+
+
+		return img;
 	}
 
 	//engine->ImmediateSubmit([=](VkCommandBuffer cmd) {
 	//	vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	//});
 
-	return img;
 }

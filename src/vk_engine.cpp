@@ -1683,12 +1683,9 @@ AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, V
     return newImg;
 }
 
-AllocatedImage VulkanEngine::CreateCubeImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, uint32_t dataSize)
+AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
 {
 	AllocatedImage newImg = CreateCubeImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name);
-    dataSize = dataSize = 0 ? size.depth * size.height * size.width * 16 * 6 : dataSize;
-
-	fmt::println("Uploading cube map with data size of {} bytes", dataSize);
 
 	int mips = newImg.mipMapViews.size() > 0 ? newImg.mipMapViews.size() : 1;
 
@@ -1697,7 +1694,7 @@ AllocatedImage VulkanEngine::CreateCubeImage(void* data, VkExtent3D size, VkForm
         for (int i = 0; i < 6; i++)
         {
             fmt::println("Copying face {} mip {}", i, mip);
-            CopyDataToImage(data, newImg, mip, i, dataSize);
+            CopyDataToImage(data[mip].data(), newImg, mip, i, data[mip].size());
         }
     }
 
@@ -1735,16 +1732,12 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
         vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); //Transition our image into one that can be written to.
 
         int const BPP = 16; //Bytes per pixel, RGBA32F, this will be derived later.
-        int offset = 0;
-        for(int m = 0; m < mip; m++)
-        {
-			offset += (img.imageExtent.width >> m) * (img.imageExtent.height >> m) * 1 * BPP * 6;
-        }
+        
 
 		uint32_t sizePerFace = size.width * size.height * BPP;
 
         VkBufferImageCopy copyRegion{};
-        copyRegion.bufferOffset = offset + (face * sizePerFace);
+        copyRegion.bufferOffset = (face * sizePerFace);
         copyRegion.bufferRowLength = 0;
         copyRegion.bufferImageHeight = 0;
 

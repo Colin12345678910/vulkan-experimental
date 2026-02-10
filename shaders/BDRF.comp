@@ -15,7 +15,7 @@ vec2 Intergrate(float NdotV, float roughness)
 
     vec3 N = vec3(0.0, 0.0, 1.0);
 
-    const int SAMPLE_COUNT = 128;
+    const int SAMPLE_COUNT = 1024;
 
     for (int i = 0; i < SAMPLE_COUNT; ++i)
     {
@@ -47,5 +47,5 @@ void main()
 {
     vec2 uv = (gl_GlobalInvocationID.xy + 0.5) / imageSize(BRDF).xy;
     vec2 intergratedBDRF = Intergrate(uv.x , uv.y);
-    imageStore(BRDF, ivec2(gl_GlobalInvocationID.xy), vec4(intergratedBDRF, 0.0, 0.0));
+    imageStore(BRDF, ivec2(gl_GlobalInvocationID.xy), vec4(intergratedBDRF, 0.0, 1.0));
 }
