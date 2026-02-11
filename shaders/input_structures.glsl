@@ -25,8 +25,7 @@ struct Vertex
 	vec3 normal;
 	float uv_y;
 	vec4 color;
-	vec3 tangent;
-	float padding;
+	vec4 tangent;
 };
 
 layout(set = 1, binding = 1) uniform sampler2D colorTex;

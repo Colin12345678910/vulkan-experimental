@@ -148,6 +148,7 @@ public:
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
 	AllocatedImage GetDefaultImage() { return _errorImage; }
+	AllocatedImage GetWhiteImage() { return _blackImage; }
 	VkSampler GetDefaultSampler(bool linear = true) { return linear ? _defaultSamplerLinear : _defaultSamplerNearest; }
 	HDRI GetCurrentHDRI() { return hdri; }
 

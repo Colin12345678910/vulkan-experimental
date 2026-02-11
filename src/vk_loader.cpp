@@ -242,7 +242,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	}
 
 	std::vector<VKDescriptors::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { 
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 }, //Our three images for the material
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 }, //Our three images for the material
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 }, //
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }
 	};
@@ -338,7 +338,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		GLTFMetallicRoughness::MaterialResources resources;
 		resources.colorImage = engine->GetDefaultImage(); //Default image for now
 		resources.colorSampler = engine->GetDefaultSampler(); //Default sampler for now
-		resources.metalRoughImage = engine->GetDefaultImage(); //Default image for now
+		resources.metalRoughImage = engine->GetWhiteImage(); //Default image for now
 
 		//Uniform buffer for the material
 		resources.dataBuffer = file.materialDataBuffer.buffer;
@@ -490,7 +490,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 						fastgltf::Accessor& tangentAccessor = gltf.accessors[tangents->second];
 						fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, tangentAccessor, [&](glm::vec4 v, size_t index)
 						{
-							vertices[initialVert + index].tangent = glm::vec3(v.x, v.y, v.z);
+							vertices[initialVert + index].tangent = v;
 						});
 					}
 				}

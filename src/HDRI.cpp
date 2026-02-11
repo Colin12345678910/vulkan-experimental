@@ -8,6 +8,8 @@ const std::string HDRI_IRRADIANCE_FILE = HDRI_CACHE_PATH + "irradiance.bin";
 const std::string HDRI_PREFILTERED_FILE = HDRI_CACHE_PATH + "prefilteredEnvMap.bin";
 const std::string HDRI_BRDFLUT_FILE = HDRI_CACHE_PATH + "brdfLUT.bin";
 
+const int SIZE = 256;
+
 bool HDRI::LoadHDRI(const char* filepath, VulkanEngine* engine)
 {
 	int w, h, n;
@@ -70,8 +72,6 @@ bool HDRI::LoadHDRI(const char* filepath, VulkanEngine* engine)
 /// <returns></returns>
 bool HDRI::GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath)
 {
-	const int SIZE = 512;
-
 	//Create the cubemap image, R32 format as this is HDR data.
 	irradiance = engine->CreateCubeImage(VkExtent3D{ SIZE, SIZE, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false, "HDRI::irradiance");
@@ -143,8 +143,6 @@ bool HDRI::GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath)
 
 bool HDRI::GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath)
 {
-	const int SIZE = 512;
-
 	prefilteredEnvMap = engine->CreateCubeImage(VkExtent3D{ SIZE, SIZE, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, true, "HDRI::prefilteredEnvMap");
 
@@ -250,8 +248,6 @@ bool HDRI::GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath)
 
 bool HDRI::GenerateBRDFLUT(VulkanEngine* engine)
 {
-	const int SIZE = 512;
-
 	brdfLUT = engine->CreateImage(VkExtent3D{ (uint32_t)SIZE, (uint32_t)SIZE, 1 }, VK_FORMAT_R32G32B32A32_SFLOAT,
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false, "HDRI::BRDFLUT");
 
@@ -338,8 +334,6 @@ bool HDRI::WriteBinToDisk(AllocatedImage img, const char* filepath, bool isCubem
 
 	for(int mip = 0; mip < numMips; mip++)
 	{
-		std::string mipFilepath = std::string(filepath) + "_mip" + std::to_string(mip);
-		std::ofstream file(mipFilepath, std::ios::binary | std::ios::app);
 		int mipWidth = img.imageExtent.width >> mip;
 		int mipHeight = img.imageExtent.height >> mip;
 		assert(mipWidth > 0 || mipHeight > 0);
@@ -375,7 +369,7 @@ AllocatedImage HDRI::CreateImageFromDisk(const char* filepath, VulkanEngine* eng
 
 	if (reader.load(filepath))
 	{
-		uint32_t imgSize = 512;
+		uint32_t imgSize = SIZE;
 		uint32_t fileSize = imgSize * imgSize * 4 * sizeof(float);
 		// Load the HDRI maps from disk if possible
 		int size = std::filesystem::file_size(filepath);

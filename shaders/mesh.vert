@@ -42,11 +42,15 @@ void main()
 	outColor = v.color.xyz * materialData.colorFactors.xyz;
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
+
+	mat4 normalMat = transpose(inverse(PushConstants.renderMatrix));
+
+	outNormal = (mat3(normalMat) * v.normal);
 	
 	//Tangents
-	vec3 T = normalize(vec3(PushConstants.renderMatrix * vec4(v.tangent, 0.0)));
-	vec3 N = normalize(vec3(PushConstants.renderMatrix * vec4(v.normal, 0.0)));
-	vec3 B = cross(outNormal, T);
+	vec3 T = normalize(vec3(normalMat * vec4(v.tangent.xyz, 0.0)));
+	vec3 N = normalize(vec3(normalMat * vec4(v.normal, 0.0)));
+	vec3 B = normalize(cross(outNormal, T) * v.tangent.w);
 	
 	outTBN = mat3(T, B, N); //Tangents, Bitangents, normal matrix.
 }

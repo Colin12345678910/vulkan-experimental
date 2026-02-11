@@ -126,8 +126,7 @@ struct Vertex
 
     glm::vec4 color;
 
-	glm::vec3 tangent;
-	float padding; //Align to 16 bytes
+	glm::vec4 tangent;
 };
 struct GPUMeshBuffers
 {
