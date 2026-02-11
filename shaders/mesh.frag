@@ -108,11 +108,7 @@ void main()
 	//float NDF = DistributionGGX(normal, halfWay, roughness);
 	//float G = GeometrySmith(normal, viewDir, L, roughness);
 
-	//vec3 F = fresnelSchlickRoughness(max(dot(halfWay, viewDir), 0.0), F0, roughness); 
-	//vec3 F = F0 + (1.0 - F0) * pow(1.0 - max(dot(halfWay, viewDir), 0.0), 4.0);
-	float f = 1.0 - max(dot(halfWay, viewDir), 0.0);
-	f = f*f*f*f;
-	vec3 F = F0 + (1.0 - F0) * f;
+	vec3 F = fresnelSchlickRoughness(max(dot(halfWay, viewDir), 0.0), F0, roughness); 
 
 	vec3 kS = F;
 	vec3 kD = vec3(1.0) - kS;
