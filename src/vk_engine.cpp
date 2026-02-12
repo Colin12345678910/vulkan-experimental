@@ -156,6 +156,8 @@ void VulkanEngine::init()
 
 void VulkanEngine::cleanup()
 {
+    _frameNumber = 0;
+
     if (_isInitialized) {
         //Wait for the GPU to finish up.
         vkDeviceWaitIdle(_device);
@@ -182,9 +184,16 @@ void VulkanEngine::cleanup()
         vkb::destroy_debug_utils_messenger(_instance, _debugMessager);
         vkDestroyInstance(_instance, nullptr);
 
+        //ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplSDL2_Shutdown();
+
+        ImGui::DestroyContext();
+
         SDL_DestroyWindow(_window);
+
     }
 
+    SDL_Quit();
     // clear engine pointer
     loadedEngine = nullptr;
 }
@@ -422,6 +431,12 @@ void VulkanEngine::run()
     // main loop
     while (!bQuit) {
         ////Calc time
+#ifdef PERFORMANCE_TEST
+        if (_frameNumber >= 1000)
+        {
+            break;
+        }
+#endif
         //long lastestframeTime = std::chrono::system_clock::now().time_since_epoch().count();
 
         //long timeForFrame = lastestframeTime - frameTime; //in microseconds
@@ -452,6 +467,8 @@ void VulkanEngine::run()
 
 			bool processEvents = true;  
 
+#ifndef PERFORMANCE_TEST
+
             if (e.type == SDL_KEYDOWN)
             {
                 if (e.key.keysym.sym == SDL_KeyCode::SDLK_ESCAPE)
@@ -474,6 +491,7 @@ void VulkanEngine::run()
             {
                 _camera.processSDLEvent(e);
             }
+#endif
             //Send SDL events
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
@@ -1439,7 +1457,11 @@ void VulkanEngine::UpdateScene()
     loadedScenes["structure"]->Draw(glm::mat4{10.0f}, mainDrawCtx);
 
     //Camera
+#ifndef PERFORMANCE_TEST
     _camera.Update(DeltaTime());
+#else
+    _camera.Demo();
+#endif // !PERFORMANCE_TEST
 
     glm::mat4 view = _camera.getView();
     glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
@@ -1722,8 +1744,10 @@ AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data
             CopyDataToImage(data[mip].data(), newImg, mip, i, data[mip].size());
         }
     }
-
+#if DEBUG
 	fmt::println("Transitioning cube map to shader read only...");
+#endif
+
     ImmediateSubmit([=](VkCommandBuffer cmd) {
         vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     });

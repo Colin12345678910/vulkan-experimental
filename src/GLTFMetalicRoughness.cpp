@@ -120,7 +120,9 @@ MaterialInstance GLTFMetallicRoughness::WriteMaterial(VkDevice device, MaterialP
         break;
     case MaterialPass::Other:
         matInstance.pipeline = &cutoutPipeline;
+#if DEBUG
         fmt::println("Invalid Material on Object."); //At some point I want to add a UUID, and naming system for objects.
+#endif
         break;
     default:
         break;

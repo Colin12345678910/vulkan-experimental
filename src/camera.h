@@ -23,4 +23,5 @@ public:
 
 	void processSDLEvent(SDL_Event& e);
 	void Update(double deltaTime);
+	void Demo();
 };

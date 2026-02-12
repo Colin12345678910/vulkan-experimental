@@ -3,13 +3,22 @@
 
 int main(int argc, char* argv[])
 {
-	VulkanEngine engine;
+#ifdef PERFORMANCE_TEST
+	for (int i = 0; i < 100; i++)
+	{
+#endif // PERFORMANCE_TEST
 
-	engine.init();	
+		VulkanEngine engine;
+
+		engine.init();
+
+		engine.run();
+
+		engine.cleanup();
+#ifdef PERFORMANCE_TEST
+	}
+#endif // PERFORMANCE_TEST
 	
-	engine.run();	
-
-	engine.cleanup();	
 
 	return 0;
 }

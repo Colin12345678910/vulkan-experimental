@@ -5,9 +5,9 @@ AutoFloatCVar CVAR_CameraSpeed("camera.speed", "Speed of the camera movement", 0
 Camera::Camera()
 {
 	velocity = glm::vec3(0.0f, 0.0f, 0.0f);
-	position = glm::vec3(0.0f, 0.0f, 5.0f);
+	position = glm::vec3(-9.0f, 1.0, 0.0f);
 	pitch = 0.0f;
-	yaw = 0.0f;
+	yaw = 190.0f;
 }
 
 glm::mat4 Camera::getView()
@@ -79,4 +79,10 @@ void Camera::Update(double deltaTime)
 	position += glm::vec3(cameraRotation * glm::vec4(velocity * (CVAR_CameraSpeed.Get() * (float)deltaTime), 0.0f));
 
 	//fmt::println("X {}, Y {}, Z {}", position.x, position.y, position.z);
+}
+
+void Camera::Demo()
+{
+	velocity = glm::vec3(0.0f, 0.0f, -1.0f);
+	Update(0.5);
 }

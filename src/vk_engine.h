@@ -17,6 +17,7 @@
 #include <vk_types.h>
 #include <vk_descriptors.h>
 #include <vk_loader.h>
+#include <unordered_set>
 #include "vk_images.h"
 #include "vk_pipelines.h"
 
@@ -41,6 +42,11 @@ struct FrameData
 
 	DeletionQueue _deletionQueue;
 	VKDescriptors::DescriptorAllocatorGrowable _frameDescriptors;
+};
+
+struct LaunchInstructions
+{
+	bool doPerformanceTest{ false };
 };
 
 struct EngineStats
@@ -166,6 +172,8 @@ public:
 
 	std::vector<ComputeEffect> backgroundEffects;
 	int currentBackground = 0;
+
+	LaunchInstructions launchInstructions;
 
 	//std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 

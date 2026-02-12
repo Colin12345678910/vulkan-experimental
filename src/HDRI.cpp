@@ -135,7 +135,9 @@ bool HDRI::GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath)
 		vkDestroyPipeline(engine->_device, computePipeline, nullptr);
 	});
 
+#if DEBUG
 	fmt::println("Submitting HDRI convolution compute shader...");
+#endif
 	vkDestroyShaderModule(engine->_device, computeShader, nullptr);
 	
 	return true;
@@ -205,8 +207,9 @@ bool HDRI::GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath)
 	// For each mip level, dispatch the compute shader with the appropriate roughness value.
 	for (int i = 0; i < prefilteredEnvMap.mipMapViews.size(); i++)
 	{
+#if DEBUG
 		fmt::println("Submitting HDRI prefilter mip level {} compute shader...", i);
-
+#endif
 		engine->ImmediateSubmit([=](VkCommandBuffer cmd) {
 			int currSize = SIZE;
 
@@ -306,8 +309,9 @@ bool HDRI::GenerateBRDFLUT(VulkanEngine* engine)
 		vkDestroyDescriptorSetLayout(engine->_device, descriptorLayout, nullptr);
 		vkDestroyPipeline(engine->_device, computePipeline, nullptr);
 	});
-
+#if DEBUG
 	fmt::println("Submitting HDRI convolution compute shader...");
+#endif
 	vkDestroyShaderModule(engine->_device, computeShader, nullptr);
 	return true;
 }
@@ -376,7 +380,9 @@ AllocatedImage HDRI::CreateImageFromDisk(const char* filepath, VulkanEngine* eng
 
 		AllocatedImage img;
 
+#if DEBUG
 		fmt::print("Loading HRDI image from disk: {}, size: {}\n", filepath, size);
+#endif
 
 		if (cubed)
 		{
