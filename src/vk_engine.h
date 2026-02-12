@@ -23,10 +23,10 @@
 #include <GLTFMetalicRoughness.h>
 
 #include "camera.h"
-#include "VkBootstrap.h"
+#include <VkBootstrap.h>
 #include "RenderNode.h"
 #include "ShadowMap.h"
-
+#include "HDRI.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -46,12 +46,49 @@ struct FrameData
 struct EngineStats
 {
 	double frameTime{ 0.0f };
-	int triangleCount{ 0 };
-	int drawCalls{ 0 };
+	int64_t triangleCount{ 0 };
+	int64_t drawCalls{ 0 };
 	double sceneUpdateTime{ 0.0f };
 	double meshDrawTime{ 0.0f };
-	int transparents{ 0 };
+	int64_t transparents{ 0 };
+
+	EngineStats operator+(const EngineStats& other)
+	{
+		EngineStats result;
+		result.frameTime = frameTime + other.frameTime;
+		result.triangleCount = triangleCount + other.triangleCount;
+		result.drawCalls = drawCalls + other.drawCalls;
+		result.sceneUpdateTime = sceneUpdateTime + other.sceneUpdateTime;
+		result.meshDrawTime = meshDrawTime + other.meshDrawTime;
+		result.transparents = transparents + other.transparents;
+		return result;
+	}
+
+	EngineStats operator/(double divisor)
+	{
+		EngineStats result;
+		result.frameTime = frameTime / divisor;
+		result.triangleCount = triangleCount / divisor;
+		result.drawCalls = drawCalls / divisor;
+		result.sceneUpdateTime = sceneUpdateTime / divisor;
+		result.meshDrawTime = meshDrawTime / divisor;
+		result.transparents = transparents / divisor;
+		return result;
+	}
+
+	void Print()
+	{
+		fmt::println("Frame Time: {} ms", frameTime);
+		fmt::println("FPS: {}", 1000.0f / frameTime);
+		fmt::println("Draw time: {} ms", meshDrawTime);
+		fmt::println("Update Time: {} ms", sceneUpdateTime);
+		fmt::println("Triangles: {}", triangleCount);
+		fmt::println("Drawcalls: {}", drawCalls);
+		fmt::println("Transparents: {}", transparents);
+	}
 };
+
+static std::forward_list<EngineStats> frameStats;
 
 class VulkanEngine {
 public:
@@ -145,13 +182,20 @@ public:
 
 	void drawBackground(VkCommandBuffer cmd);
 
+	double DeltaTime() { return stats.frameTime; }
+
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
 	AllocatedImage GetDefaultImage() { return _errorImage; }
+	AllocatedImage GetWhiteImage() { return _blackImage; }
 	VkSampler GetDefaultSampler(bool linear = true) { return linear ? _defaultSamplerLinear : _defaultSamplerNearest; }
+	HDRI GetCurrentHDRI() { return hdri; }
 
-	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage");
-	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage");
+	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
+	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
+	AllocatedImage CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateCubeImage");
+	AllocatedImage CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
+	AllocatedImage CopyDataToImage(void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	void DestroyBuffer(const AllocatedBuffer& buffer);
@@ -159,7 +203,7 @@ public:
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor, VkPipeline pipelineOverride, VkPipelineLayout pipelineLayoutOverride);
 
-
+	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	//run main loop
 	void run();
 private:
@@ -174,7 +218,6 @@ private:
 	void InitializeMeshPipeline();
 	void InitializeDefaultImages();
 	void InitializeDefaultData();
-	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	void InitializeImgui();
 	void ResizeSwapchain();
 	void DrawGeometry(VkCommandBuffer cmd);
@@ -192,6 +235,9 @@ private:
 	AllocatedImage _errorImage;
 
 	AllocatedImage _noiseImage;
+	AllocatedBuffer screenshotBuffer;
+
+	HDRI hdri;
 
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 

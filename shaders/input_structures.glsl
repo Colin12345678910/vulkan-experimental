@@ -25,10 +25,12 @@ struct Vertex
 	vec3 normal;
 	float uv_y;
 	vec4 color;
-	vec3 tangent;
-	float padding;
+	vec4 tangent;
 };
 
 layout(set = 1, binding = 1) uniform sampler2D colorTex;
 layout(set = 1, binding = 2) uniform sampler2D metalRoughTex;
 layout(set = 1, binding = 3) uniform sampler2D normalTex;
+layout(set = 1, binding = 4) uniform samplerCube irradianceImage;
+layout(set = 1, binding = 5) uniform samplerCube prefilterMap;
+layout(set = 1, binding = 6) uniform sampler2D brdfLUT;
