@@ -46,12 +46,49 @@ struct FrameData
 struct EngineStats
 {
 	double frameTime{ 0.0f };
-	int triangleCount{ 0 };
-	int drawCalls{ 0 };
+	int64_t triangleCount{ 0 };
+	int64_t drawCalls{ 0 };
 	double sceneUpdateTime{ 0.0f };
 	double meshDrawTime{ 0.0f };
-	int transparents{ 0 };
+	int64_t transparents{ 0 };
+
+	EngineStats operator+(const EngineStats& other)
+	{
+		EngineStats result;
+		result.frameTime = frameTime + other.frameTime;
+		result.triangleCount = triangleCount + other.triangleCount;
+		result.drawCalls = drawCalls + other.drawCalls;
+		result.sceneUpdateTime = sceneUpdateTime + other.sceneUpdateTime;
+		result.meshDrawTime = meshDrawTime + other.meshDrawTime;
+		result.transparents = transparents + other.transparents;
+		return result;
+	}
+
+	EngineStats operator/(double divisor)
+	{
+		EngineStats result;
+		result.frameTime = frameTime / divisor;
+		result.triangleCount = triangleCount / divisor;
+		result.drawCalls = drawCalls / divisor;
+		result.sceneUpdateTime = sceneUpdateTime / divisor;
+		result.meshDrawTime = meshDrawTime / divisor;
+		result.transparents = transparents / divisor;
+		return result;
+	}
+
+	void Print()
+	{
+		fmt::println("Frame Time: {} ms", frameTime);
+		fmt::println("FPS: {}", 1000.0f / frameTime);
+		fmt::println("Draw time: {} ms", meshDrawTime);
+		fmt::println("Update Time: {} ms", sceneUpdateTime);
+		fmt::println("Triangles: {}", triangleCount);
+		fmt::println("Drawcalls: {}", drawCalls);
+		fmt::println("Transparents: {}", transparents);
+	}
 };
+
+static std::forward_list<EngineStats> frameStats;
 
 class VulkanEngine {
 public:

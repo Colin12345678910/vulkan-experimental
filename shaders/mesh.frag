@@ -36,7 +36,7 @@ float shadowCoeff(float bias)
 	{
 		rand = 0.0f;
 		
-		return offsetLookup(shadowTex, shade.xyzz, vec2(x + rand, y + rand)).x > currentDepth + bias? 0.7 : 1;
+		return offsetLookup(shadowTex, shade.xyzz, vec2(x + rand, y + rand)).x > currentDepth + bias? 0.0 : 1;
 	}
 	
 	for (y = -1.5; y <= 1.5; y += 1.0)
@@ -63,8 +63,11 @@ void main()
 
 	//Here we set up some values we pull from textures
 	vec3 normal = normalize(texture(normalTex, inUV) * 2.0 - 1.0).xyz;
+	//vec3 normal = normalize(vec4(1.0, 1.0, 1.0, 1.0) * 2.0 - 1.0).xyz;
+	
 
 	normal = normalize(TBN * normal);
+	//normal = normalize(inNormal);
 
 	vec4 metalicRoughness = texture(metalRoughTex, inUV);
 	float metallic = metalicRoughness.b;
@@ -91,10 +94,10 @@ void main()
 	float shadowBias = max(0.0005 * (1.0 - NdotL), 0.00005);
 
 	float shadowDepth = shadowCoeff(shadowBias);
-
-
 	//ViewDir
 	vec3 viewDir = normalize(sceneData.cameraPos.xyz - inPos.xyz);
+	//viewDir = vec3(0, 0, 1);
+
 	vec3 halfWay = normalize(viewDir + L);
 
 	vec3 F0 = vec3(0.04);
@@ -119,10 +122,11 @@ void main()
 	//Specular
 	vec3 specular = vec3(0.0);
 
-	vec3 R = normalize(reflect(-viewDir, normal));
-	R.y = -R.y;
+	vec3 R = normalize(reflect(-viewDir, inNormal)); //Using input normal as it's less prone to distortion
+	//R.y = -R.y;
 
-	const float MAX_REFLECTION_LOD = 4;
+	const float MAX_REFLECTION_LOD = 4; //LOD's above 4 cause severe slowdown on RDNA1. (1-2ms)
+
 	vec3 prefilteredColour = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
 	vec2 envBDRF = texture(brdfLUT, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
 	specular = prefilteredColour * (F * envBDRF.x + envBDRF.y);
@@ -144,30 +148,6 @@ void main()
 	col /= (col + vec3(1.0));
 	col = pow(col, vec3(1.0/2.2));
 	outFragColor = vec4(col, 1.0);
-
-	
-
-
-	// vec4 metalicRoughness = texture(metalRoughTex, inUV);
-	// vec3 normal = normalize(texture(normalTex, inUV) * 2.0 - 1.0).xyz;//normalize(inNormal);//normalize(vec4(inNormal, 0.0) * texture(normalTex, inUV));
-	// normal = normalize(inTBN * normal);
-	
-	// vec3 color = inColor * texture(colorTex, inUV).xyz;
-	
-	// float lightValue = max(dot(normal.xyz, sceneData.sunlightDirection.xyz), 0.0f);
-	// vec3 diffuse = vec3(lightValue);
-	
-	// float specularStrength = 5.0f * metalicRoughness.b;
-	
-	// vec3 viewDir = normalize(sceneData.cameraPos.xyz - inPos.xyz);
-	// vec3 halfwayDir = normalize(sceneData.sunlightDirection.xyz + viewDir);
-	
-	// float spec = pow(max(dot(normal, halfwayDir), 0.0), 16 * metalicRoughness.g);
-	// vec3 specular = specularStrength * spec * vec3(1.0);
-	
-	// float shadowDepth = shadowCoeff();
-	
-	// vec3 result = color * (sceneData.ambientColor.xyz + diffuse + specular);
-	// result *= shadowDepth;
-	// outFragColor = vec4(result, 1.0f);
+	//outFragColor = vec4(normalize(R) * 0.5 + 0.5, 1.0);
+	//outFragColor = vec4(normal, 0.0);
 }

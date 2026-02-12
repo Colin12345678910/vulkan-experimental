@@ -43,14 +43,19 @@ void main()
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
 
-	mat4 normalMat = transpose(inverse(PushConstants.renderMatrix));
-
-	outNormal = (mat3(normalMat) * v.normal);
+	mat4 model = PushConstants.renderMatrix;//transpose(inverse(PushConstants.renderMatrix));
 	
 	//Tangents
-	vec3 T = normalize(vec3(normalMat * vec4(v.tangent.xyz, 0.0)));
-	vec3 N = normalize(vec3(normalMat * vec4(v.normal, 0.0)));
-	vec3 B = normalize(cross(outNormal, T) * v.tangent.w);
+	vec3 T = normalize(vec3(model * vec4(v.tangent.xyz, 0.0)));
+	vec3 N = normalize(vec3(model * vec4(v.normal, 0.0)));
+
+	T = normalize(T - dot(T, N) * N);
+
+	vec3 B = normalize(cross(N, T)) * v.tangent.w;
+	B = normalize(B);
+	T = normalize(T);
+	N = normalize(N);
 	
 	outTBN = mat3(T, B, N); //Tangents, Bitangents, normal matrix.
+	outNormal = N;
 }

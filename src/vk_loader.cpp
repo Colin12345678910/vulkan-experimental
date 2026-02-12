@@ -274,10 +274,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	//Load textures
 	for (fastgltf::Image& img : gltf.images)
 	{
-		if (file.images.count(img.name.c_str())) //If the image is already loaded, skip it
+		if (file.images.count(img.name.c_str())) //If the image is already loaded, rename it.
 		{
-			fmt::println("Image {} already loaded, renaming...", img.name);
-			
+			//fmt::println("Image {} already loaded, renaming...", img.name);
 			img.name = "Unknown Image " + std::to_string(unknownImg++);
 		}
 		std::optional<AllocatedImage> image = loadImage(engine, gltf, img); //Load the image
@@ -339,6 +338,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		resources.colorImage = engine->GetDefaultImage(); //Default image for now
 		resources.colorSampler = engine->GetDefaultSampler(); //Default sampler for now
 		resources.metalRoughImage = engine->GetWhiteImage(); //Default image for now
+		resources.normalImage = engine->GetWhiteImage(); //Default image for now
 
 		//Uniform buffer for the material
 		resources.dataBuffer = file.materialDataBuffer.buffer;

@@ -556,7 +556,23 @@ void VulkanEngine::run()
         */
 
         stats.frameTime = elapsed.count() / 1000.0f; //in milliseconds
+		frameStats.push_front(stats);
     }
+
+    EngineStats total{};
+	EngineStats average{};
+	int count = 0;
+
+    for (auto stat : frameStats)
+    {
+        total = total + stat;
+        count++;
+    }
+
+    average = total / count;
+
+    fmt::println("Average:");
+    average.Print();
 }
 
 void VulkanEngine::InitializeVulkan()
@@ -1340,24 +1356,26 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	stats.meshDrawTime = elapsed.count() / 1000.0f;
 }
 
-AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 10000.0f);
+//AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 10000.0f);
 AutoFloatCVar CVAR_shadow_scale("shadow.scale", "Size of the shadowmap", 30.0f);
 
 AutoFloatCVar CVAR_shadow_x("shadow.x", "Position of the Shadowmap in the X plane", 100.0f);
 AutoFloatCVar CVAR_shadow_y("shadow.y", "Position of the Shadowmap in the Y plane", -1000.0f);
-AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 0.0f);
+AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 100.0f);
 
 void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
 {
     GPUSceneData shadowScene;
     {
-        shadowScene.proj = glm::ortho(-CVAR_shadow_scale.Get(), CVAR_shadow_scale.Get(), -CVAR_shadow_scale.Get(), CVAR_shadow_scale.Get(), 0.001f, farPlane.Get());
+		float fp = glm::distance(_camera.position, glm::vec3(CVAR_shadow_x.Get(), CVAR_shadow_y.Get(), CVAR_shadow_z.Get()));
+        
+        shadowScene.proj = glm::ortho(-CVAR_shadow_scale.Get(), CVAR_shadow_scale.Get(), -CVAR_shadow_scale.Get(), CVAR_shadow_scale.Get(), 0.001f, fp + 100);
 
         float shadowX = _camera.position.x + CVAR_shadow_x.Get();
         float shadowY = _camera.position.y + CVAR_shadow_y.Get();
         float shadowZ = _camera.position.z + CVAR_shadow_z.Get();
 
-        glm::vec3 shadowPos = _camera.position + glm::vec3(_camera.getForward()) * CVAR_shadow_scale.Get();
+        glm::vec3 shadowPos = _camera.position;// +glm::vec3(_camera.getForward()) * CVAR_shadow_scale.Get();
 
         glm::mat4 cameraRotation = glm::lookAt(glm::vec3(shadowX, shadowY, shadowZ), shadowPos, glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -1701,7 +1719,6 @@ AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data
     {
         for (int i = 0; i < 6; i++)
         {
-            fmt::println("Copying face {} mip {}", i, mip);
             CopyDataToImage(data[mip].data(), newImg, mip, i, data[mip].size());
         }
     }
@@ -1769,7 +1786,7 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
 
 void VulkanEngine::DestroyImage(const AllocatedImage& img)
 {
-    fmt::println("Deallocating {}", img.allocation->GetName());
+    //fmt::println("Deallocating {}", img.allocation->GetName());
     if (img.mipMapViews.size() > 0)
     {
         for (auto& view : img.mipMapViews)
