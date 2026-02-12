@@ -92,7 +92,7 @@ const bool USE_VALIDATION = true;
 VulkanEngine* loadedEngine = nullptr;
 
 AutoBoolCVar CVAR_ScreenShot("engine.screenshot", "Takes a screenshot next frame", false);
-AutoBoolCVar CVAR_ShadowPCF("shadow.PCF", "Enables PCF", false);
+AutoBoolCVar CVAR_ShadowPCF("shadow.PCF", "Enables PCF", true);
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 void VulkanEngine::init()
@@ -1140,12 +1140,20 @@ void VulkanEngine::InitializeDefaultImages()
 
     sampl.magFilter = VK_FILTER_NEAREST;
     sampl.minFilter = VK_FILTER_NEAREST;
+	sampl.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 
     vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerNearest);
 
     sampl.magFilter = VK_FILTER_LINEAR;
     sampl.minFilter = VK_FILTER_LINEAR;
-    vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
+    sampl.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+
+    //vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
+
+    sampl.maxLod = 9;
+    sampl.minLod = 0;
+
+	vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
 
     _mainDeletionQueue.Push([&]()
     {
@@ -1333,11 +1341,11 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 }
 
 AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 10000.0f);
-AutoFloatCVar CVAR_shadow_scale("shadow.scale", "Speed of the camera movement", 300.0f);
+AutoFloatCVar CVAR_shadow_scale("shadow.scale", "Size of the shadowmap", 30.0f);
 
-AutoFloatCVar CVAR_shadow_x("shadow.x", "Position of the Shadowmap in the X plane", 1000.0f);
+AutoFloatCVar CVAR_shadow_x("shadow.x", "Position of the Shadowmap in the X plane", 100.0f);
 AutoFloatCVar CVAR_shadow_y("shadow.y", "Position of the Shadowmap in the Y plane", -1000.0f);
-AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 1000.0f);
+AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 0.0f);
 
 void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
 {
@@ -1349,7 +1357,7 @@ void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
         float shadowY = _camera.position.y + CVAR_shadow_y.Get();
         float shadowZ = _camera.position.z + CVAR_shadow_z.Get();
 
-        glm::vec3 shadowPos = _camera.position;
+        glm::vec3 shadowPos = _camera.position + glm::vec3(_camera.getForward()) * CVAR_shadow_scale.Get();
 
         glm::mat4 cameraRotation = glm::lookAt(glm::vec3(shadowX, shadowY, shadowZ), shadowPos, glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -1413,7 +1421,7 @@ void VulkanEngine::UpdateScene()
     loadedScenes["structure"]->Draw(glm::mat4{10.0f}, mainDrawCtx);
 
     //Camera
-    _camera.Update();
+    _camera.Update(DeltaTime());
 
     glm::mat4 view = _camera.getView();
     glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
@@ -1685,7 +1693,7 @@ AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, V
 
 AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
 {
-	AllocatedImage newImg = CreateCubeImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name);
+	AllocatedImage newImg = CreateCubeImage(size, format, usage, mipmapped, name);
 
 	int mips = newImg.mipMapViews.size() > 0 ? newImg.mipMapViews.size() : 1;
 

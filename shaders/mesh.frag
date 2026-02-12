@@ -68,12 +68,12 @@ void main()
 
 	vec4 metalicRoughness = texture(metalRoughTex, inUV);
 	float metallic = metalicRoughness.b;
+	float ao = metalicRoughness.r;
 	float roughness = max(0.2, metalicRoughness.g);
 
 	//Setup albedo + stub for ao.
 	vec3 albedo = texture(colorTex, inUV).xyz;
 	albedo = pow(albedo, vec3(2.2));
-	float ao = 1.0;
 
 	//Light colour and settings, mostly hardcoded for now.
 	vec3 lightCol = vec3(3.0);
@@ -108,7 +108,7 @@ void main()
 	//float NDF = DistributionGGX(normal, halfWay, roughness);
 	//float G = GeometrySmith(normal, viewDir, L, roughness);
 
-	vec3 F = fresnelSchlickRoughness(max(dot(halfWay, viewDir), 0.0), F0, roughness); 
+	vec3 F = fresnelSchlickRoughness(max(dot(halfWay, viewDir), 0.0), F0, roughness);
 
 	vec3 kS = F;
 	vec3 kD = vec3(1.0) - kS;

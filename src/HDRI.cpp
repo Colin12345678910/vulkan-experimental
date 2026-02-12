@@ -381,12 +381,12 @@ AllocatedImage HDRI::CreateImageFromDisk(const char* filepath, VulkanEngine* eng
 		if (cubed)
 		{
 			img = engine->CreateCubeImage(reader.GetFileData(), VkExtent3D{imgSize, imgSize, 1}, VK_FORMAT_R32G32B32A32_SFLOAT,
-				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, mipmapped, filepath);
 		}
 		else
 		{
 			img = engine->CreateImage(reader.files[0].data.data(), VkExtent3D{imgSize, imgSize, 1}, VK_FORMAT_R32G32B32A32_SFLOAT,
-				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, filepath);
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, mipmapped, filepath);
 		}
 
 

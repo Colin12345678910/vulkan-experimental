@@ -145,6 +145,8 @@ public:
 
 	void drawBackground(VkCommandBuffer cmd);
 
+	double DeltaTime() { return stats.frameTime; }
+
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
 	AllocatedImage GetDefaultImage() { return _errorImage; }

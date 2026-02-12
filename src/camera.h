@@ -22,5 +22,5 @@ public:
 	glm::vec4 getPosition() { return glm::vec4(position, 0.0f); }
 
 	void processSDLEvent(SDL_Event& e);
-	void Update();
+	void Update(double deltaTime);
 };
