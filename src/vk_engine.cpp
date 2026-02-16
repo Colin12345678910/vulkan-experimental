@@ -1445,16 +1445,17 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 
 AutoFloatCVar ambientLight("float.ambient", "Ambient Light Intensity", 0.5f);
 AutoFloatCVar sunLight("float.sunlight", "Sun Light Intensity", 1.0f);
+AutoFloatCVar CVAR_SceneSize("float.size", "Size of the scene", 1.0f);
 
 void VulkanEngine::UpdateScene()
 {
 	auto start = std::chrono::system_clock::now();
     mainDrawCtx.OpaqueSurfaces.clear();
     
-    glm::mat4 scale = glm::scale(glm::vec3(0.2));
+    glm::mat4 scale = glm::scale(glm::vec3(CVAR_SceneSize.Get()));
     glm::mat4 translation = glm::translate(glm::vec3(0, 0, 0));
 
-    loadedScenes["structure"]->Draw(glm::mat4{10.0f}, mainDrawCtx);
+    loadedScenes["structure"]->Draw(scale * translation, mainDrawCtx);
 
     //Camera
 #ifndef PERFORMANCE_TEST

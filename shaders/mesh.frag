@@ -55,24 +55,24 @@ float shadowCoeff(float bias)
 void main()
 {
 	mat3 TBN = inTBN;
-	// TBN[0] = normalize(inTBN[0]);
-	// TBN[2] = normalize(inTBN[2]);
-	// TBN[1] = normalize(cross(TBN[2], TBN[0]));
+	 TBN[0] = normalize(inTBN[0]);
+	 TBN[2] = normalize(inTBN[2]);
+	 TBN[1] = normalize(cross(TBN[2], TBN[0]));
 
 	//PBR pathway
 
 	//Here we set up some values we pull from textures
 	vec3 normal = normalize(texture(normalTex, inUV) * 2.0 - 1.0).xyz;
 	//vec3 normal = normalize(vec4(1.0, 1.0, 1.0, 1.0) * 2.0 - 1.0).xyz;
-	
+	//normal = vec3(0.5, 0.5, 1.0);
 
 	normal = normalize(TBN * normal);
-	//normal = normalize(inNormal);
+	//normal = inNormal;
 
 	vec4 metalicRoughness = texture(metalRoughTex, inUV);
 	float metallic = metalicRoughness.b;
 	float ao = metalicRoughness.r;
-	float roughness = max(0.2, metalicRoughness.g);
+	float roughness = max(0.02, metalicRoughness.g);
 
 	//Setup albedo + stub for ao.
 	vec3 albedo = texture(colorTex, inUV).xyz;
@@ -111,7 +111,9 @@ void main()
 	//float NDF = DistributionGGX(normal, halfWay, roughness);
 	//float G = GeometrySmith(normal, viewDir, L, roughness);
 
-	vec3 F = fresnelSchlickRoughness(max(dot(halfWay, viewDir), 0.0), F0, roughness);
+	float NDotV = max(dot(normal, viewDir), 0.01);
+
+	vec3 F = fresnelSchlickRoughness(NDotV, F0, roughness);
 
 	vec3 kS = F;
 	vec3 kD = vec3(1.0) - kS;
@@ -122,10 +124,9 @@ void main()
 	//Specular
 	vec3 specular = vec3(0.0);
 
-	vec3 R = normalize(reflect(-viewDir, inNormal)); //Using input normal as it's less prone to distortion
-	//R.y = -R.y;
+	vec3 R = normalize(reflect(viewDir, normal)); //ViewDir does not need inversion, as the cubemap is already inverted.
 
-	const float MAX_REFLECTION_LOD = 4; //LOD's above 4 cause severe slowdown on RDNA1. (1-2ms)
+	const float MAX_REFLECTION_LOD = 9; 
 
 	vec3 prefilteredColour = textureLod(prefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
 	vec2 envBDRF = texture(brdfLUT, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
@@ -137,7 +138,6 @@ void main()
 
 	vec3 ambient = (kD * diffuse + specular);
 
-
 	
 	Lo += shadowDepth * (kD * albedo / PI + specular) * radiance * NdotL; //Add light
 
@@ -148,6 +148,6 @@ void main()
 	col /= (col + vec3(1.0));
 	col = pow(col, vec3(1.0/2.2));
 	outFragColor = vec4(col, 1.0);
-	//outFragColor = vec4(normalize(R) * 0.5 + 0.5, 1.0);
+	//outFragColor = vec4(normalize(inTBN[2]) * 0.5 + 0.5, 1.0);
 	//outFragColor = vec4(normal, 0.0);
 }

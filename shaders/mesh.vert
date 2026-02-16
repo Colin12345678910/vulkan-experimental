@@ -43,11 +43,11 @@ void main()
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
 
-	mat4 model = PushConstants.renderMatrix;//transpose(inverse(PushConstants.renderMatrix));
+	mat3 normalMat = mat3(transpose(inverse(PushConstants.renderMatrix)));
 	
 	//Tangents
-	vec3 T = normalize(vec3(model * vec4(v.tangent.xyz, 0.0)));
-	vec3 N = normalize(vec3(model * vec4(v.normal, 0.0)));
+	vec3 T = normalize(normalMat * v.tangent.xyz);
+	vec3 N = normalize(normalMat * v.normal);
 
 	T = normalize(T - dot(T, N) * N);
 

@@ -8,7 +8,7 @@ const std::string HDRI_IRRADIANCE_FILE = HDRI_CACHE_PATH + "irradiance.bin";
 const std::string HDRI_PREFILTERED_FILE = HDRI_CACHE_PATH + "prefilteredEnvMap.bin";
 const std::string HDRI_BRDFLUT_FILE = HDRI_CACHE_PATH + "brdfLUT.bin";
 
-const int SIZE = 256;
+const int SIZE = 512;
 
 bool HDRI::LoadHDRI(const char* filepath, VulkanEngine* engine)
 {
