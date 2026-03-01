@@ -7,14 +7,21 @@ int main(int argc, char* argv[])
 	for (int i = 0; i < 100; i++)
 	{
 #endif // PERFORMANCE_TEST
+		
+		ExitInstructions instructions{};
 
-		VulkanEngine engine;
+		do
+		{
+			VulkanEngine engine;
 
-		engine.init();
+			engine.init(instructions);
 
-		engine.run();
+			engine.run();
 
-		engine.cleanup();
+			engine.cleanup();
+
+			instructions = engine.exitInstructions;
+		} while (instructions.relaunch);
 #ifdef PERFORMANCE_TEST
 	}
 #endif // PERFORMANCE_TEST

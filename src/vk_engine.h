@@ -44,9 +44,10 @@ struct FrameData
 	VKDescriptors::DescriptorAllocatorGrowable _frameDescriptors;
 };
 
-struct LaunchInstructions
+struct ExitInstructions
 {
-	bool doPerformanceTest{ false };
+	bool relaunch{ false };
+	std::string scenePath;
 };
 
 struct EngineStats
@@ -173,12 +174,13 @@ public:
 	std::vector<ComputeEffect> backgroundEffects;
 	int currentBackground = 0;
 
-	LaunchInstructions launchInstructions;
+	ExitInstructions exitInstructions;
 
 	//std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	//initializes everything in the engine
-	void init();
+	void init(ExitInstructions instructions);
+	void init() { init({ ExitInstructions{} }); };
 
 	//shuts down the engine
 	void cleanup();

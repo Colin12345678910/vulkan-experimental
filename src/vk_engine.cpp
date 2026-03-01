@@ -12,6 +12,7 @@
 
 #define VMA_IMPLEMENTATION
 #define VMA_DEBUG_INITIALIZE_ALLOCATIONS 1
+//#define PERFORMANCE_TEST
 
 //#define VMA_DEBUG_LOG_FORMAT(format, ...) do { \
 //       printf((format), __VA_ARGS__); \
@@ -85,7 +86,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Debug_CallBack(VkDebugUtilsMessageSeverityFlagBit
 
 
 #if NDEBUG
-const bool USE_VALIDATION = false;
+const bool USE_VALIDATION = true;
 #else
 const bool USE_VALIDATION = true;
 #endif
@@ -95,7 +96,7 @@ AutoBoolCVar CVAR_ScreenShot("engine.screenshot", "Takes a screenshot next frame
 AutoBoolCVar CVAR_ShadowPCF("shadow.PCF", "Enables PCF", true);
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
-void VulkanEngine::init()
+void VulkanEngine::init(ExitInstructions instructions)
 {
 	// Ensure that Renderdoc or other tools can hook in before we initialize Vulkan
 	std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -140,6 +141,11 @@ void VulkanEngine::init()
     InitializeDefaultData();
 
     std::string structurePath = "..\\..\\assets\\Sponza.gltf"; //structure arena
+
+    if (instructions.relaunch)
+    {
+        structurePath = instructions.scenePath;
+    }
 	auto structure = loadGLTF(this, structurePath);
 
 	assert(structure.has_value(), "Failed to load structure glb file");
@@ -432,7 +438,7 @@ void VulkanEngine::run()
     while (!bQuit) {
         ////Calc time
 #ifdef PERFORMANCE_TEST
-        if (_frameNumber >= 1000)
+        if (_frameNumber >= 10000)
         {
             break;
         }
@@ -463,6 +469,14 @@ void VulkanEngine::run()
                 if (e.window.event == SDL_WINDOWEVENT_RESTORED) {
                     stop_rendering = false;
                 }
+            }
+            if (e.type == SDL_DROPFILE)
+            {
+                fmt::println("File {}", e.drop.file);
+                exitInstructions.scenePath = e.drop.file;
+                exitInstructions.relaunch = true;
+                bQuit = true;
+                SDL_free(e.drop.file);
             }
 
 			bool processEvents = true;  
@@ -598,7 +612,7 @@ void VulkanEngine::InitializeVulkan()
     vkb::InstanceBuilder builder;
 
     //Make the vulkan instance with basic Debug.
-    auto instanceConfig = builder.set_app_name("Example Vulkan Application")
+    auto instanceConfig = builder.set_app_name("VulkanExperiment")
         .request_validation_layers(USE_VALIDATION)
         .set_debug_callback(Debug_CallBack)
         .require_api_version(1, 3, 0)
@@ -1445,7 +1459,7 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 
 AutoFloatCVar ambientLight("float.ambient", "Ambient Light Intensity", 0.5f);
 AutoFloatCVar sunLight("float.sunlight", "Sun Light Intensity", 1.0f);
-AutoFloatCVar CVAR_SceneSize("float.size", "Size of the scene", 1.0f);
+AutoFloatCVar CVAR_SceneSize("float.size", "Size of the scene", 1.0f, 20.0f);
 
 void VulkanEngine::UpdateScene()
 {

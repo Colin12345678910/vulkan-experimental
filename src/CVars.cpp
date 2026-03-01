@@ -8,6 +8,7 @@ template<typename T>
 struct CVarStorage
 {
 	T initial;
+	T max;
 	T current;
 	CVarParameter* parameters;
 };
@@ -44,6 +45,7 @@ struct CVarArray
 	{
 		int index = lastCvarIndex++;
 		cvars[index].initial = val;
+		cvars[index].max = val;
 		cvars[index].current = val;
 		cvars[index].parameters = param;
 
@@ -54,7 +56,19 @@ struct CVarArray
 	{
 		int index = lastCvarIndex++;
 		cvars[index].current = currentVal;
+		cvars[index].max = initialVal;
 		cvars[index].initial = initialVal;
+		cvars[index].parameters = param;
+
+		param->arrayIndex = index;
+		return index;
+	}
+	int Add(const T& initialVal, const T& currentVal, const T& maxVal, CVarParameter* param)
+	{
+		int index = lastCvarIndex++;
+		cvars[index].current = currentVal;
+		cvars[index].initial = initialVal;
+		cvars[index].max = maxVal;
 		cvars[index].parameters = param;
 
 		param->arrayIndex = index;
@@ -67,7 +81,7 @@ class CVarImpl : public CVar
 public:
 	// Functions for Creating CVars.
 	CVarParameter* GetCVar(size_t hash) override final;
-	CVarParameter* CreateFloatCVar(const char* name, const char* description, float defaultValue, CVarFlags flags = CVarFlags::None) override final;
+	CVarParameter* CreateFloatCVar(const char* name, const char* description, float defaultValue, float maxValue, CVarFlags flags = CVarFlags::None) override final;
 	CVarParameter* CreateIntCVar(const char* name, const char* description, int32_t defaultValue, CVarFlags flags = CVarFlags::None) override final;
 	CVarParameter* CreateStringCVar(const char* name, const char* description, const char* defaultValue, CVarFlags flags = CVarFlags::None) override final;
 	CVarParameter* CreateBoolCVar(const char* name, const char* description, bool defaultValue, CVarFlags flags = CVarFlags::None) override final;
@@ -170,7 +184,7 @@ CVarParameter* CVarImpl::GetCVar(size_t hash)
 	return nullptr; // CVar not found
 }
 
-CVarParameter* CVarImpl::CreateFloatCVar(const char* name, const char* description, float defaultValue, CVarFlags flags)
+CVarParameter* CVarImpl::CreateFloatCVar(const char* name, const char* description, float defaultValue, float maxValue, CVarFlags flags)
 {
 	CVarParameter* param = InitCVar(name, description);
 	if (!param)
@@ -179,7 +193,7 @@ CVarParameter* CVarImpl::CreateFloatCVar(const char* name, const char* descripti
 	}
 	param->type = CVarType::FLOAT;
 
-	GetCVarArray<float>()->Add(defaultValue, param);
+	GetCVarArray<float>()->Add(defaultValue, defaultValue, maxValue, param);
 	return param;
 }
 
@@ -268,7 +282,7 @@ void CVarImpl::ImGuiDisplayCVars()
 	for(int i = 0; i < floatCVars.lastCvarIndex; i++)
 	{
 		CVarParameter* param = floatCVars.cvars[i].parameters;	
-		ImGui::SliderFloat(param->name.c_str(), &floatCVars.cvars[i].current, floatCVars.cvars[i].initial - floatCVars.cvars[i].initial * 10.0, 10.0 * floatCVars.cvars[i].initial);
+		ImGui::SliderFloat(param->name.c_str(), &floatCVars.cvars[i].current, floatCVars.cvars[i].initial - floatCVars.cvars[i].max, floatCVars.cvars[i].max);
 	}
 
 	ImGui::SeparatorText("Integers");
@@ -340,9 +354,10 @@ void SetCVarCurrentByIndex(int32_t index, T value)
 	return cvarSystem->GetCVarArray<T>()->SetCurrent(index, value);
 }
 
-AutoFloatCVar::AutoFloatCVar(const char* name, const char* description, float defaultValue, CVarFlags flags)
+AutoFloatCVar::AutoFloatCVar(const char* name, const char* description, float defaultValue, float maxValue, CVarFlags flags)
 {
-	CVarParameter* param = CVarImpl::Get()->CreateFloatCVar(name, description, defaultValue, flags);
+	maxValue = maxValue == FLT_MAX ? defaultValue * 10.0f : maxValue;
+	CVarParameter* param = CVarImpl::Get()->CreateFloatCVar(name, description, defaultValue, maxValue, flags);
 	param->flags = flags;
 	index = param->arrayIndex;
 }

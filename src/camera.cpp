@@ -84,5 +84,4 @@ void Camera::Update(double deltaTime)
 void Camera::Demo()
 {
 	velocity = glm::vec3(0.0f, 0.0f, -1.0f);
-	Update(0.5);
 }

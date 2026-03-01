@@ -91,10 +91,6 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 	AllocatedImage img{};
 
 	int width, height, channels;
-	if (image.name == "GTLF_0010_tex49")
-	{
-		fmt::println("Image: {}", image.name);
-	}
 
 	std::visit(
 		fastgltf::visitor
@@ -187,7 +183,8 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 
 std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::filesystem::path filepath)
 {
-#if DEBUG
+#if NDEBUG
+#else
 	fmt::println("Loading GLTF: {}", filepath.string());
 #endif
 
@@ -246,7 +243,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	}
 
 	std::vector<VKDescriptors::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { 
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 }, //Our three images for the material
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 }, //Our three images for the material, plus our 3 enviroment textures (potentially swap them out perobject based on a voxelgrid?)
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 }, //
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }
 	};
@@ -292,9 +289,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		}
 		else
 		{
-			//fmt::println("Failed to load image: {}", img.name);
+			fmt::println("Failed to load image: {}", img.name);
 			images.push_back(engine->GetDefaultImage());
-			//return {}; //Return empty optional if we failed to load the image
 		}
 	}
 

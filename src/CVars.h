@@ -37,7 +37,7 @@ class CVar
 {
 public:
 	virtual CVarParameter* GetCVar(size_t hash) = 0;
-	virtual CVarParameter* CreateFloatCVar(const char* name, const char* description, float defaultValue, CVarFlags flags = CVarFlags::None) = 0;
+	virtual CVarParameter* CreateFloatCVar(const char* name, const char* description, float defaultValue, float maxValue, CVarFlags flags = CVarFlags::None) = 0;
 	virtual CVarParameter* CreateIntCVar(const char* name, const char* description, int32_t defaultValue, CVarFlags flags = CVarFlags::None) = 0;
 	virtual CVarParameter* CreateStringCVar(const char* name, const char* description, const char* defaultValue, CVarFlags flags = CVarFlags::None) = 0;
 	virtual CVarParameter* CreateBoolCVar(const char* name, const char* description, bool defaultValue, CVarFlags flags = CVarFlags::None) = 0;
@@ -64,7 +64,7 @@ protected:
 
 struct AutoFloatCVar : public AutoCVar<float>
 {
-	AutoFloatCVar(const char* name, const char* description, float defaultValue, CVarFlags flags = CVarFlags::None);
+	AutoFloatCVar(const char* name, const char* description, float defaultValue, float maxValue = FLT_MAX, CVarFlags flags = CVarFlags::None);
 
 	float Get();
 	void Set(float val);

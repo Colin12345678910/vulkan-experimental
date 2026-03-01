@@ -11,7 +11,9 @@ layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec4 shadowPos;
 layout (location = 4) out vec3 outPos;
 
-layout (location = 5) out mat3 outTBN;
+layout (location = 5) out vec3 outT;
+layout (location = 6) out vec3 outB;
+layout (location = 7) out vec3 outN;
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer
 {
@@ -43,11 +45,11 @@ void main()
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
 
-	mat3 normalMat = mat3(transpose(inverse(PushConstants.renderMatrix)));
+	mat4 model = PushConstants.renderMatrix;//transpose(inverse(PushConstants.renderMatrix));
 	
 	//Tangents
-	vec3 T = normalize(normalMat * v.tangent.xyz);
-	vec3 N = normalize(normalMat * v.normal);
+	vec3 T = normalize(vec3(model * vec4(v.tangent.xyz, 0.0)));
+	vec3 N = normalize(vec3(model * vec4(v.normal, 0.0)));
 
 	T = normalize(T - dot(T, N) * N);
 
@@ -56,6 +58,8 @@ void main()
 	T = normalize(T);
 	N = normalize(N);
 	
-	outTBN = mat3(T, B, N); //Tangents, Bitangents, normal matrix.
+	outT = T;
+	outN = N;
+	outB = B;
 	outNormal = N;
 }

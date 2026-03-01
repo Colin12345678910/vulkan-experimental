@@ -116,7 +116,7 @@ bool HDRI::GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath)
 
 	// Assign images to the descriptor set, then dispatch the compute shader
 	VKDescriptors::DescriptorWriter writer;
-	writer.WriteImage(0, hdrImage.imageView, engine->GetDefaultSampler(true), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+	writer.WriteImage(0, hdrImage.imageView, engine->GetDefaultSampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 		.WriteImage(1, irradiance.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
 		.UpdateSet(engine->_device, descriptorSet);
 
@@ -216,7 +216,7 @@ bool HDRI::GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath)
 			pushData->roughness = (float)i / (float)(prefilteredEnvMap.mipMapViews.size() - 1);
 
 			VKDescriptors::DescriptorWriter writer;
-			writer.WriteImage(0, hdrImage.imageView, engine->GetDefaultSampler(true), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+			writer.WriteImage(0, hdrImage.imageView, engine->GetDefaultSampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 				.WriteImage(1, prefilteredEnvMap.mipMapViews[i], VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
 				.WriteBuffer(2, buff.buffer, sizeof(PushData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
 				.UpdateSet(engine->_device, descriptorSet);
@@ -292,7 +292,7 @@ bool HDRI::GenerateBRDFLUT(VulkanEngine* engine)
 
 	// Assign output image to the descriptor set, then dispatch the compute shader
 	VKDescriptors::DescriptorWriter writer;
-	writer.WriteImage(0, brdfLUT.imageView, engine->GetDefaultSampler(true), VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+	writer.WriteImage(0, brdfLUT.imageView, engine->GetDefaultSampler(), VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
 		.UpdateSet(engine->_device, descriptorSet);
 
 	engine->ImmediateSubmit([=](VkCommandBuffer cmd) {
