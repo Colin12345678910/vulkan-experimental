@@ -107,7 +107,6 @@ void main()
 
 	//Sum of all lighting
 	//This is just skylight for now.
-	vec3 Lo = vec3(0.0);
 	
 	//Cook-torrance BDRF
 	//float NDF = DistributionGGX(normal, halfWay, roughness);
@@ -121,7 +120,7 @@ void main()
 	vec3 irradiance = texture(irradianceImage, normal).rgb;
 	vec3 diffuse = irradiance * albedo;
 
-	//Specular
+	//Specular 
 	vec3 specular = vec3(0.0);
 
 	vec3 R = normalize(reflect(-viewDir, inNormal));
@@ -129,20 +128,23 @@ void main()
 
 	const float MAX_REFLECTION_LOD = 4; //LOD's above 4 cause severe slowdown on RDNA1. (1-2ms)
 
-	vec3 prefilteredColour = textureLod(prefilterMap, R, (roughness * MAX_REFLECTION_LOD) - 1).rgb;
-	vec2 envBDRF = texture(brdfLUT, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
-	specular = prefilteredColour * (F * envBDRF.x + envBDRF.y);
+	if (roughness <= 0.7)
+	{
+		vec3 prefilteredColour = textureLod(prefilterMap, R, (roughness * MAX_REFLECTION_LOD) - 1).rgb;
+		vec2 envBDRF = texture(brdfLUT, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
+		specular = prefilteredColour * (F * envBDRF.x + envBDRF.y);
+	}
 
+	
 	// vec3 numerator = NDF * G * F;
 	// float denom = 4.0 * max(dot(normal, viewDir), 0.0) * max(dot(normal, L), 0.0) + 0.0001;
 	// specular += numerator / denom;
 
-	vec3 ambient = (kD * diffuse + specular);
+	vec3 col = (kD * diffuse + specular);
 
 	//Add skylight ambient.
-	vec3 skyLight = ambient + (ambient * shadowDepth);
+	col += (col * shadowDepth);
 
-	vec3 col = skyLight + Lo;
 	col /= (col + vec3(1.0));
 	col = pow(col, vec3(1.0/2.2));
 	outFragColor = vec4(col, 1.0);

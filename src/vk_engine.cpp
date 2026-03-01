@@ -86,7 +86,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Debug_CallBack(VkDebugUtilsMessageSeverityFlagBit
 
 
 #if NDEBUG
-const bool USE_VALIDATION = true;
+const bool USE_VALIDATION = false;
 #else
 const bool USE_VALIDATION = true;
 #endif
@@ -238,37 +238,6 @@ void VulkanEngine::draw()
     //Reset cmd so we can begin recording
     VK_CHECK(vkResetCommandBuffer(cmd, 0)); //No flags neeeded.
 
-    if (CVAR_DoShadows.Get())
-    {
-        //ShadowPass
-        VK_CHECK(vkResetFences(_device, 1, &GetCurrentFrame()._shadowFence));
-
-
-        //Define the CMD
-        VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //One time use CMD,
-
-        _drawExtent.width = 2048;
-        _drawExtent.height = 2048;
-
-        VkFence completeShadows;
-
-        VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
-
-        //Transition the shadowmap for the next frame.
-        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-        DrawShadows(cmd);
-        
-        VK_CHECK(vkEndCommandBuffer(cmd));
-
-        VkCommandBufferSubmitInfo info = vkinit::command_buffer_submit_info(cmd);
-        
-        auto submit = vkinit::submit_info(&info, nullptr, nullptr); //No semaphores need to be signaled, since the CPU needs to bind the shadowtex...
-        VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, GetCurrentFrame()._shadowFence));
-
-        vkWaitForFences(_device, 1, &GetCurrentFrame()._shadowFence, VK_TRUE, 1000000000);
-    }
-
     //Define the CMD
     VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT); //One time use CMD,
 
@@ -279,6 +248,23 @@ void VulkanEngine::draw()
     _drawExtent.width = std::min(_swapchainExtent.width, _drawImage.imageExtent.width) * renderScale;
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+    if (CVAR_DoShadows.Get())
+    {
+        /*
+        * Yea, I don't know how I didn't realize that I could just sneak the 
+        * shadowpass rendering into the main queue, there is literally zero
+        * reason for the CPU to care about the status of the shadowpass anyway.
+        * 
+        * So enjoy this hilariously simplified shadowcasting code.
+        * Extra performance for no cost is always a win
+        */
+
+        //Transition the shadowmap for the next frame.
+        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+        DrawShadows(cmd);
+    }
 
     //Convert our main drawImage into a layout for writing, and clearing it.
     vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
