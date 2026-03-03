@@ -1640,8 +1640,8 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
     //Setup allocation rules
     VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    //allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     // allocate and create
     VK_CHECK(vmaCreateImage(_allocator, &imgInfo, &allocInfo, &newImg.image, &newImg.allocation, nullptr));
@@ -1666,6 +1666,14 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
 AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
 {
+    std::vector<VmaBudget> budgets(VK_MAX_MEMORY_HEAPS);
+    vmaGetHeapBudgets(_allocator, budgets.data());
+
+    if (budgets[0].usage >= budgets[0].budget * 0.7f)
+    {
+        return GetDefaultImage();
+    }
+
     AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name, arrayLayers);
 
 	CopyDataToImage(data, newImg);

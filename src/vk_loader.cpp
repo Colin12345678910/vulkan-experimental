@@ -324,7 +324,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 		if (mat.alphaMode == fastgltf::AlphaMode::Blend)
 		{
-			passType = MaterialPass::Transparent;
+			//passType = MaterialPass::Transparent;
 		}
 		//TODO : Support more alpha modes
 		else if (mat.alphaMode == fastgltf::AlphaMode::Mask)
