@@ -17,6 +17,31 @@ layout (location = 7) in vec3 inN;
 
 layout (location = 0) out vec4 outFragColor;
 
+
+// PBRNeturalToneMapper as provided by Khronos; under CC by 4.0
+// @: https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral
+// Input color is non-negative and resides in the Linear Rec. 709 color space.
+// Output color is also Linear Rec. 709, but in the [0, 1] range.
+
+vec3 PBRNeutralToneMapping( vec3 color ) {
+  const float startCompression = 0.8 - 0.04;
+  const float desaturation = 0.15;
+
+  float x = min(color.r, min(color.g, color.b));
+  float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+  color -= offset;
+
+  float peak = max(color.r, max(color.g, color.b));
+  if (peak < startCompression) return color;
+
+  const float d = 1. - startCompression;
+  float newPeak = 1. - d * d / (peak + d - startCompression);
+  color *= newPeak / peak;
+
+  float g = 1. - 1. / (desaturation * (peak - newPeak) + 1.);
+  return mix(color, newPeak * vec3(1, 1, 1), g);
+}
+
 vec3 offsetLookup(sampler2D map, vec4 location, vec2 offset)
 {
 	vec2 texmapScale = 2.0 / textureSize(shadowTex, 0);
@@ -32,8 +57,8 @@ float shadowCoeff(float bias)
 	float currentDepth = shade.z;
 	shade = shade * 0.5 + 0.5;
 	
-	float rand;
-	rand = fract(sin(inPos.x) * sin(inPos.y) * sin(inPos.z) * 19523.12512356);
+	float rand = 0.0f;
+	rand = fract(sin(inPos.x) * sin(inPos.y) * sin(inPos.z) * 19523523.12512356);
 	if (sceneData.time.w == 0.0f)
 	{
 		rand = 0.0f;
@@ -72,12 +97,13 @@ void main()
 	//normal = normalize(inNormal);
 
 	vec4 metalicRoughness = texture(metalRoughTex, inUV);
-	float metallic = metalicRoughness.b;
-	float ao = metalicRoughness.r;
+	float metallic = metalicRoughness.b * materialData.metalRoughFactors.x;
+	float ao = metalicRoughness.r  * materialData.metalRoughFactors.y;
 	float roughness = max(0.02, metalicRoughness.g);
 
 	//Setup albedo + stub for ao.
 	vec3 albedo = texture(colorTex, inUV).xyz;
+	albedo *= materialData.colorFactors.xyz;
 	albedo = pow(albedo, vec3(2.2));
 
 	//Light colour and settings, mostly hardcoded for now.
@@ -123,14 +149,14 @@ void main()
 	//Specular 
 	vec3 specular = vec3(0.0);
 
-	vec3 R = normalize(reflect(-viewDir, inNormal));
+	vec3 R = normalize(reflect(viewDir, inNormal));
 	//R.y = -R.y;
 
-	const float MAX_REFLECTION_LOD = 4; //LOD's above 4 cause severe slowdown on RDNA1. (1-2ms)
+	const float MAX_REFLECTION_LOD = 9;
 
 	if (roughness <= 0.7)
 	{
-		vec3 prefilteredColour = textureLod(prefilterMap, R, (roughness * MAX_REFLECTION_LOD) - 1).rgb;
+		vec3 prefilteredColour = textureLod(prefilterMap, R, (roughness * MAX_REFLECTION_LOD)).rgb;
 		vec2 envBDRF = texture(brdfLUT, vec2(max(dot(normal, viewDir), 0.0), roughness)).rg;
 		specular = prefilteredColour * (F * envBDRF.x + envBDRF.y);
 	}
@@ -140,12 +166,16 @@ void main()
 	// float denom = 4.0 * max(dot(normal, viewDir), 0.0) * max(dot(normal, L), 0.0) + 0.0001;
 	// specular += numerator / denom;
 
-	vec3 col = (kD * diffuse + specular);
+	vec3 col = (kD * diffuse + specular) * 0.75;
 
 	//Add skylight ambient.
-	col += (col * shadowDepth);
+	col += (col * shadowDepth * 10);
 
-	col /= (col + vec3(1.0));
+	//col = ACESFilm(col);
+
+	col = PBRNeutralToneMapping(col);
+
+	//Gamma correction
 	col = pow(col, vec3(1.0/2.2));
 	outFragColor = vec4(col, 1.0);
 	//outFragColor = vec4(normalize(R) * 0.5 + 0.5, 1.0);
