@@ -93,7 +93,6 @@ const bool USE_VALIDATION = true;
 VulkanEngine* loadedEngine = nullptr;
 
 AutoBoolCVar CVAR_ScreenShot("engine.screenshot", "Takes a screenshot next frame", false);
-AutoBoolCVar CVAR_ShadowPCF("shadow.PCF", "Enables PCF", true);
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 void VulkanEngine::init(ExitInstructions instructions)
@@ -1446,6 +1445,7 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
 AutoFloatCVar ambientLight("float.ambient", "Ambient Light Intensity", 0.5f);
 AutoFloatCVar sunLight("float.sunlight", "Sun Light Intensity", 1.0f);
 AutoFloatCVar CVAR_SceneSize("float.size", "Size of the scene", 1.0f, 20.0f);
+AutoIntCVar CVAR_ToneMap("HDR.tonemap", "Currently selected tonemapper", 0);
 
 void VulkanEngine::UpdateScene()
 {
@@ -1489,7 +1489,7 @@ void VulkanEngine::UpdateScene()
     _sceneData.time.x = elapsed.count();
     _sceneData.time.y = _frameNumber;
 	_sceneData.time.z = time * 1e-6f;
-	_sceneData.time.w = CVAR_ShadowPCF.Get() ? 1.0f : 0.0f;
+    _sceneData.time.w = (float)CVAR_ToneMap.Get();
 
 	stats.sceneUpdateTime = elapsed.count() / 1000.0f;
 }

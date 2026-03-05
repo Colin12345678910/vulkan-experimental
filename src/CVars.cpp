@@ -289,7 +289,7 @@ void CVarImpl::ImGuiDisplayCVars()
 	for (int i = 0; i < intCVars.lastCvarIndex; i++)
 	{
 		CVarParameter* param = intCVars.cvars[i].parameters;
-		ImGui::SliderInt(param->name.c_str(), &intCVars.cvars[i].current, intCVars.cvars[i].initial * 0, 1024);
+		ImGui::InputInt(param->name.c_str(), &intCVars.cvars[i].current, 1, 100);
 	}
 
 	ImGui::SeparatorText("Strings");

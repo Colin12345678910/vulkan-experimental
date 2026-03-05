@@ -4,6 +4,7 @@
 #extension GL_EXT_buffer_reference : require
 #include "input_structures.glsl"
 #include "math.glsl"
+#include "tonemaps.glsl"
 
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
@@ -16,31 +17,6 @@ layout (location = 6) in vec3 inB;
 layout (location = 7) in vec3 inN;
 
 layout (location = 0) out vec4 outFragColor;
-
-
-// PBRNeturalToneMapper as provided by Khronos; under CC by 4.0
-// @: https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral
-// Input color is non-negative and resides in the Linear Rec. 709 color space.
-// Output color is also Linear Rec. 709, but in the [0, 1] range.
-
-vec3 PBRNeutralToneMapping( vec3 color ) {
-  const float startCompression = 0.8 - 0.04;
-  const float desaturation = 0.15;
-
-  float x = min(color.r, min(color.g, color.b));
-  float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
-  color -= offset;
-
-  float peak = max(color.r, max(color.g, color.b));
-  if (peak < startCompression) return color;
-
-  const float d = 1. - startCompression;
-  float newPeak = 1. - d * d / (peak + d - startCompression);
-  color *= newPeak / peak;
-
-  float g = 1. - 1. / (desaturation * (peak - newPeak) + 1.);
-  return mix(color, newPeak * vec3(1, 1, 1), g);
-}
 
 vec3 offsetLookup(sampler2D map, vec4 location, vec2 offset)
 {
@@ -59,12 +35,6 @@ float shadowCoeff(float bias)
 	
 	float rand = 0.0f;
 	rand = fract(sin(inPos.x) * sin(inPos.y) * sin(inPos.z) * 19523523.12512356);
-	if (sceneData.time.w == 0.0f)
-	{
-		rand = 0.0f;
-		
-		return offsetLookup(shadowTex, shade.xyzz, vec2(x + rand, y + rand)).x > currentDepth + bias? 0.0 : 1;
-	}
 	
 	for (y = -1.5; y <= 1.5; y += 1.0)
 	{
@@ -171,9 +141,18 @@ void main()
 	//Add skylight ambient.
 	col += (col * shadowDepth * 10);
 
-	//col = ACESFilm(col);
-
-	col = PBRNeutralToneMapping(col);
+	int tmap = int(sceneData.time.w);
+	switch(tmap) {
+		case 0:
+			col = PBRNeutralToneMapping(col);
+			break;
+		case 1:
+			col = ACESFilm(col);
+			break;
+		case 2:
+			col = reinhard(col);
+			break;
+	}
 
 	//Gamma correction
 	col = pow(col, vec3(1.0/2.2));
