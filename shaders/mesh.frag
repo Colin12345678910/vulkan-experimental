@@ -68,8 +68,8 @@ void main()
 
 	vec4 metalicRoughness = texture(metalRoughTex, inUV);
 	float metallic = metalicRoughness.b * materialData.metalRoughFactors.x;
-	float ao = metalicRoughness.r  * materialData.metalRoughFactors.y;
-	float roughness = max(0.02, metalicRoughness.g);
+	float ao = metalicRoughness.r;
+	float roughness = max(0.02, metalicRoughness.g) * materialData.metalRoughFactors.y;
 
 	//Setup albedo + stub for ao.
 	vec3 albedo = texture(colorTex, inUV).xyz;

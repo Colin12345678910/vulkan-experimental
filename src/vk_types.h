@@ -79,6 +79,10 @@ struct AllocatedImage
         case VK_FORMAT_R32G32B32A32_SFLOAT:
             dataSize = imageExtent.depth * imageExtent.height * imageExtent.width * 16; //Image with the size, height and depth has 16 bytes per pixel;
             break;
+        case VK_FORMAT_BC7_SRGB_BLOCK:
+        case VK_FORMAT_BC7_UNORM_BLOCK:
+            dataSize = imageExtent.depth * imageExtent.height * imageExtent.width;
+            break;
         default:
             fmt::println("Unsupported format passed to CreateImage with data!");
         }

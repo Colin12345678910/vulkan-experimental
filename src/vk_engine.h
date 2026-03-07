@@ -207,7 +207,7 @@ public:
 	AllocatedImage CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
 	AllocatedImage CopyDataToImage(void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
 
-	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, std::string name = "VulkanEngine::Internal::Staging");
 	void DestroyBuffer(const AllocatedBuffer& buffer);
 	void DestroyImage(const AllocatedImage& img);
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);

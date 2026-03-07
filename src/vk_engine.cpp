@@ -1266,7 +1266,7 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     GPUMeshBuffers newSurface;
 
     //CreateVertexBuff
-    newSurface.vertexBuffer = CreateBuffer(vertexBuffSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    newSurface.vertexBuffer = CreateBuffer(vertexBuffSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY, "VulkanEngine::UploadMesh::VertexBuffer");
 
     //find the Address of vertexBuffer
 
@@ -1274,7 +1274,7 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAddressInfo);
 
     //Create index buffer
-    newSurface.indexBuffer = CreateBuffer(indexBuffSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    newSurface.indexBuffer = CreateBuffer(indexBuffSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, "VulkanEngine::UploadMesh::IndexBuffer");
 
     AllocatedBuffer staging = CreateBuffer(vertexBuffSize + indexBuffSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
@@ -1782,8 +1782,7 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
     
     if (fileSize == 0) { fileSize = dataSize; }
     
-    AllocatedBuffer uploadBuff = CreateBuffer(fileSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
+    AllocatedBuffer uploadBuff = CreateBuffer(fileSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, "VulkanEngine::CopyDataToImage::UploadBuf");
     memcpy(uploadBuff.info.pMappedData, data, fileSize);
 
 	//fmt::println("Successfully copied {} bytes to upload staging buffer", dataSize);
@@ -1838,7 +1837,7 @@ void VulkanEngine::DestroyImage(const AllocatedImage& img)
     vmaDestroyImage(_allocator, img.image, img.allocation);
 }
 
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, std::string name)
 {
     VkBufferCreateInfo bufferInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr };
     bufferInfo.size = allocSize;
@@ -1859,6 +1858,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
     AllocatedBuffer buff;
 
     VK_CHECK(vmaCreateBuffer(_allocator, &bufferInfo, &vmaInfo, &buff.buffer, &buff.allocation, &buff.info));
+    vmaSetAllocationName(_allocator, buff.allocation, name.c_str());
 
     return buff;
 }
