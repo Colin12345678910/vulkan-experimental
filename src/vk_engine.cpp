@@ -326,10 +326,12 @@ void VulkanEngine::draw()
     VkCommandBufferSubmitInfo cmdInfo = vkinit::command_buffer_submit_info(cmd);
 
     VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, GetCurrentFrame()._swapchainSemaphore);
-    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, GetCurrentFrame()._renderSemaphore);
+    //according to VK Spec, the signalled semaphore must be from the swapChainimageIndex and not current inflight frame.
+    // https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html 
+    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, _frames[swapchainImageIndex]._renderSemaphore);
 
     VkSubmitInfo2 submit = vkinit::submit_info(&cmdInfo, &signalInfo, &waitInfo);
-
+    
     VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, GetCurrentFrame()._renderFence));
     //Present the image.
     //We want to present our newly drawn image to the window
@@ -339,7 +341,7 @@ void VulkanEngine::draw()
     presentInfo.pSwapchains = &_swapchain;
     presentInfo.swapchainCount = 1;
 
-    presentInfo.pWaitSemaphores = &GetCurrentFrame()._renderSemaphore;
+    presentInfo.pWaitSemaphores = &_frames[swapchainImageIndex]._renderSemaphore;
     presentInfo.waitSemaphoreCount = 1;
 
     presentInfo.pImageIndices = &swapchainImageIndex;
@@ -810,9 +812,14 @@ void VulkanEngine::InitializeDescriptors()
     // Create a descriptor pool of size 10, 1
     std::vector<VKDescriptors::DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
     {
+        {
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1
+        },
         { 
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 
-            1
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1
+        },
+        { 
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1  
         }
     };
     globalDescriptiorAllocator.InitPool(_device, 10, sizes);
@@ -1126,7 +1133,7 @@ void VulkanEngine::InitializeMeshPipeline()
         .DisableBlending()
         .EnableDepthTest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
         .SetPipelineLayout(_meshPipelineLayout)
-		.SetNoColorAttachment()
+        .SetNoColorAttachment()
         .SetDepthFormat(_depthImage.imageFormat)
         .BuildPipeline(_device);
 
@@ -1327,7 +1334,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     VKDescriptors::DescriptorWriter writer;
     
     //Create a descriptorSet that binds the global GPU dataBuffer
-    globalDescriptor = GetCurrentFrame()._frameDescriptors.Allocate(_device, _gpuSceneDataDescriptorLayout);
+    globalDescriptor = globalDescriptiorAllocator.Allocate(_device, _gpuSceneDataDescriptorLayout);
     
     writer
         .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
@@ -1425,7 +1432,7 @@ void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
     VKDescriptors::DescriptorWriter writer;
 
     //Create a descriptorSet that binds the global GPU dataBuffer
-    globalDescriptor = GetCurrentFrame()._frameDescriptors.Allocate(_device, _gpuSceneDataDescriptorLayout);
+    globalDescriptor = globalDescriptiorAllocator.Allocate(_device, _gpuSceneDataDescriptorLayout);
 
     shadowMap.Draw(cmd, globalDescriptor, writer, gpuSceneDataBuf);
 }

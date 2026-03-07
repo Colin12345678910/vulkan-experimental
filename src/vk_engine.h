@@ -29,7 +29,7 @@
 #include "ShadowMap.h"
 #include "HDRI.h"
 
-constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr unsigned int FRAME_OVERLAP = 3;
 
 struct FrameData
 {

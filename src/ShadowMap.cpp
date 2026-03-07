@@ -45,6 +45,7 @@ void ShadowMap::Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor, VKDe
     VkRenderingAttachmentInfo depthAttachmentInfo = vkinit::depth_attachment_info(depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     VkRenderingInfo renderInfo = vkinit::rendering_info(imgExtent, &colorAttachment, &depthAttachmentInfo);
+    renderInfo.colorAttachmentCount = 0;
 
     vkCmdBeginRendering(cmd, &renderInfo);
 
