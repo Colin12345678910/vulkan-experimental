@@ -98,11 +98,27 @@ AllocatedImage KTX2EngineImage(VulkanEngine* engine, ktxTexture2* kText, std::st
 	ktx_size_t offset = 0;
 	ktxTexture2_TranscodeBasis(kText, KTX_TTF_BC7_RGBA, 0);
 
+	std::vector<std::vector<uint8_t>> mips;
 
-	ktxTexture_GetImageOffset(ktxTexture(kText), 0, 0, 0, &offset);
+	for (int i = 0; i < kText->numLevels; i++)
+	{
+		auto height = kText->baseHeight >> i;
+		auto width = kText->baseWidth >> i;
 
-	uint8_t* data = kText->pData + offset;
-	AllocatedImage img = engine->CreateImage(data, imageSize, VK_FORMAT_BC7_UNORM_BLOCK, VK_IMAGE_USAGE_SAMPLED_BIT, false, std::string("GLTF::BUFV::" + name), 1);
+		//If we are below the blocksize of bc7 it will try to copy 16 bytes anyway
+		//This will overflow and cause a hard crash.
+		if ((width * height) < 16)
+		{
+			break;
+		}
+		
+		ktxTexture_GetImageOffset(ktxTexture(kText), i, 0, 0, &offset);
+		uint8_t* data = kText->pData + offset;
+
+		mips.push_back(std::vector(data, data + (height * width * kText->baseDepth)));
+	}
+
+	AllocatedImage img = engine->CreateMippedImage(mips, imageSize, VK_FORMAT_BC7_UNORM_BLOCK, VK_IMAGE_USAGE_SAMPLED_BIT, std::string("GLTF::BUFV::" + name));
 	ktxTexture_Destroy(ktxTexture(kText));
 	return img;
 }

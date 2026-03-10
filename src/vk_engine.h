@@ -201,8 +201,9 @@ public:
 	VkSampler GetDefaultSampler(bool linear = true) { return linear ? _defaultSamplerLinear : _defaultSamplerNearest; }
 	HDRI GetCurrentHDRI() { return hdri; }
 
-	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
+	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, int mipLevels = 1, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
 	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
+	AllocatedImage CreateMippedImage(std::vector<std::vector<uint8_t>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, std::string name = "VulkanEngine::CreateImage");
 	AllocatedImage CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateCubeImage");
 	AllocatedImage CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
 	AllocatedImage CopyDataToImage(void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
@@ -213,6 +214,7 @@ public:
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor, VkPipeline pipelineOverride, VkPipelineLayout pipelineLayoutOverride);
 
+	
 	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	//run main loop
 	void run();

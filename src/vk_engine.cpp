@@ -1630,7 +1630,7 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
     }
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
+AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, int mipLevels, std::string name, int arrayLayers)
 {
     AllocatedImage newImg;
     newImg.imageFormat = format;
@@ -1640,10 +1640,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
     imgInfo.arrayLayers = arrayLayers;
 
-    if (mipmapped)
-    {
-        imgInfo.mipLevels = std::floor(std::log2(std::max(size.width, size.height))) + 1;
-    }
+    imgInfo.mipLevels = mipLevels;
 
     //Setup allocation rules
     VmaAllocationCreateInfo allocInfo{};
@@ -1673,15 +1670,20 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
 AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
 {
-    std::vector<VmaBudget> budgets(VK_MAX_MEMORY_HEAPS);
-    vmaGetHeapBudgets(_allocator, budgets.data());
+    //std::vector<VmaBudget> budgets(VK_MAX_MEMORY_HEAPS);
+    //vmaGetHeapBudgets(_allocator, budgets.data());
 
-    if (budgets[0].usage >= budgets[0].budget * 0.7f)
+    //if (budgets[0].usage >= budgets[0].budget * 0.7f)
+    //{
+    //    return GetDefaultImage();
+    //}
+    int mipLevels = 1;
+    if (mipmapped)
     {
-        return GetDefaultImage();
+        mipLevels = std::floor(std::log2(std::max(size.width, size.height))) + 1;
     }
 
-    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name, arrayLayers);
+    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipLevels, name, arrayLayers);
 
 	CopyDataToImage(data, newImg);
 	
@@ -1697,6 +1699,23 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
         }
     });
 
+    return newImg;
+}
+
+AllocatedImage VulkanEngine::CreateMippedImage(std::vector<std::vector<uint8_t>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, std::string name)
+{
+    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, data.size(), name, 1);
+
+    for (int i = 0; i < data.size(); i++)
+    {
+        auto mip = data[i];
+        newImg = CopyDataToImage(mip.data(), newImg, i, 0, mip.size());
+    }
+
+    ImmediateSubmit([&](VkCommandBuffer cmd)
+    {
+        vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
     return newImg;
 }
 

@@ -122,7 +122,7 @@ void main()
 	vec3 R = normalize(reflect(viewDir, inNormal));
 	//R.y = -R.y;
 
-	const float MAX_REFLECTION_LOD = 9;
+	const float MAX_REFLECTION_LOD = 5;
 
 	if (roughness <= 0.7)
 	{
