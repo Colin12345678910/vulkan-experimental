@@ -1,8 +1,8 @@
 # Vulkan Experimental
 
-![PBR](https://colin12345678910.github.io/portfolio/assets/images/Vulkan_PBRNeutral.jpg)
+![Vulkan_PBRNetural](https://github.com/user-attachments/assets/d610729c-0a8e-42a4-b174-4a836f001695)
 
-Vulkan Experimental is a render project intended to teach myself not just how Vulkan works in comparison to DirectX, but also how a game engine is actually structured. This project implements several features found in modern graphics renderers and game engines. The project remains open-source under MIT. Despite this, this is not an open project and is intended for learning purposes.
+Vulkan Experimental is a rendering project intended to teach myself not just how Vulkan works compared to DirectX, but also how a game engine is actually structured. This project implements several features found in modern graphics renderers and game engines. The project remains open-source under MIT. Despite this, this is not an open project and is intended for learning purposes.
 
 ## Features
 
