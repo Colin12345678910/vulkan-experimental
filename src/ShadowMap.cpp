@@ -7,7 +7,7 @@ void ShadowMap::CreateShadowMap(VulkanEngine& engine, uint32_t width, uint32_t h
         { width, height, 1 },
         VK_FORMAT_D32_SFLOAT,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        false,
+        1,
 		"ShadowMap::depthImage");
 
     shadowTexIMGUI = ImGui_ImplVulkan_AddTexture(engine.GetDefaultSampler(), depthImage.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

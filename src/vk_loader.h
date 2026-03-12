@@ -58,5 +58,8 @@ private:
 };
 
 std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image);
+void BinImg(unsigned char* data, int width, int height, const AllocatedImage& img, VulkanEngine* engine);
+void IMG_BufferView(int width, int height, int channels, const AllocatedImage& img, VulkanEngine* engine, fastgltf::Buffer& buffer);
+void KTX2_BufferView(const AllocatedImage& img, VulkanEngine* engine, fastgltf::Buffer& buffer);
 std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::filesystem::path filepath);
 std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGLTFMeshes(VulkanEngine* engine, std::filesystem::path filepath);

@@ -6,6 +6,7 @@
 #include "vk_initializers.h"
 #include "vk_types.h"
 #include <glm/gtx/quaternion.hpp>
+#include <ktx.h>
 
 int fPath = 0, Vector = 0, BView = 0, Meshes = 0, Samplers = 0, Materials = 0;
 int unknownImg = 0;
@@ -19,12 +20,13 @@ void LoadedGLTF::ClearAll()
 	
 	descriptorPool.DestroyPool(device); //Destroy the descriptor pool
 	engine->DestroyBuffer(materialDataBuffer); //Destroy the material data buffer
-
+	
 	for (auto& [k, mesh] : meshes)
 	{
 		engine->DestroyBuffer(mesh->meshBuffers.vertexBuffer); //Destroy the vertex buffer
 		engine->DestroyBuffer(mesh->meshBuffers.indexBuffer); //Destroy the index buffer
 	}
+
 	for (auto& [k, img] : images)
 	{
 		if (img.image == engine->GetDefaultImage().image) //If the image is the default image, skip it
@@ -86,6 +88,116 @@ void LoadedGLTF::Draw (const glm::mat4& topMat, DrawContext& ctx)
 	}
 }
 
+#pragma region Image Loading
+#pragma region Helper/Converter Methods
+AllocatedImage KTX2EngineImage(VulkanEngine* engine, ktxTexture2* kText, std::string name)
+{
+	VkExtent3D imageSize;
+	imageSize.width = kText->baseWidth;
+	imageSize.height = kText->baseHeight;
+	imageSize.depth = kText->baseDepth;
+
+	ktx_size_t offset = 0;
+	ktxTexture2_TranscodeBasis(kText, KTX_TTF_BC7_RGBA, 0);
+
+	std::vector<std::vector<uint8_t>> mips;
+
+	for (int i = 0; i < kText->numLevels; i++)
+	{
+		auto height = kText->baseHeight >> i;
+		auto width = kText->baseWidth >> i;
+
+		//If we are below the blocksize of bc7 it will try to copy 16 bytes anyway
+		//This will overflow and cause a hard crash.
+		if ((width * height) < 16)
+		{
+			break;
+		}
+		
+		ktxTexture_GetImageOffset(ktxTexture(kText), i, 0, 0, &offset);
+		uint8_t* data = kText->pData + offset;
+
+		mips.push_back(std::vector(data, data + (height * width * kText->baseDepth)));
+	}
+
+	AllocatedImage img = engine->CreateMippedImage(mips, imageSize, VK_FORMAT_BC7_UNORM_BLOCK, VK_IMAGE_USAGE_SAMPLED_BIT, std::string("GLTF::BUFV::" + name));
+	ktxTexture_Destroy(ktxTexture(kText));
+	return img;
+}
+
+void BinImg(unsigned char* data, int width, int height, AllocatedImage& img, VulkanEngine* engine, std::string name)
+{
+	if (data)
+	{
+		VkExtent3D imageSize;
+		imageSize.width = width;
+		imageSize.height = height;
+		imageSize.depth = 1;
+		img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::VEC::" + name));
+		stbi_image_free(data); //Free the image data after we are done with it
+	}
+}
+
+void BinKTX2(VulkanEngine* engine, AllocatedImage& img, uint8_t* data, size_t length, std::string name)
+{
+	ktxTexture2* kText;
+	auto result = ktxTexture2_CreateFromMemory(data, length, 0, &kText);
+
+	if (result == KTX_SUCCESS)
+	{
+		img = KTX2EngineImage(engine, kText, name);
+	}
+}
+
+void FileKTX2(VulkanEngine* engine, AllocatedImage& img, std::string filePath, std::string name)
+{
+	ktxTexture2* kText;
+	auto result = ktxTexture2_CreateFromNamedFile(filePath.c_str(), 0, &kText);
+
+	if (result == KTX_SUCCESS)
+	{
+		img = KTX2EngineImage(engine, kText, name);
+	}
+}
+
+void IMG_BufferView(int width, int height, int channels, AllocatedImage& img, VulkanEngine* engine, fastgltf::Buffer& buffer, fastgltf::BufferView& bufferView, std::string name)
+{
+	std::visit(fastgltf::visitor{
+		[](auto& arg) {},
+		[&](fastgltf::sources::Vector& vector)
+		{
+			unsigned char* data = stbi_load_from_memory(vector.bytes.data() + bufferView.byteOffset,
+				static_cast<int>(bufferView.byteLength),
+				&width, &height, &channels, 4
+				);
+			if (data)
+			{
+				VkExtent3D imageSize;
+				imageSize.width = width;
+				imageSize.height = height;
+				imageSize.depth = 1;
+				img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::BUFV::" + name));
+				stbi_image_free(data); //Free the image data after we are done with it
+			}
+		}
+		}, buffer.data);
+}
+
+void KTX2_BufferView(AllocatedImage& img, VulkanEngine* engine, fastgltf::Buffer& buffer, fastgltf::BufferView& bufferView, std::string name)
+{
+	std::visit(fastgltf::visitor{
+		[](auto& arg) {},
+		[&](fastgltf::sources::Vector& vector)
+	{
+		uint8_t* ptr = vector.bytes.data();
+		ptr += bufferView.byteOffset;
+
+		BinKTX2(engine, img, ptr, bufferView.byteLength, name);
+	}
+		}, buffer.data);
+}
+#pragma endregion
+
 std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
 {
 	AllocatedImage img{};
@@ -107,63 +219,48 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 
 				path = root + path; //Prepend the root path to the image path
 
-				unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+				
 
-				if (data)
+				switch (filePath.mimeType)
 				{
-					VkExtent3D imageSize;
-					imageSize.width = width;
-					imageSize.height = height;
-					imageSize.depth = 1;
-
-					img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::URI::" + image.name));
-					stbi_image_free(data); //Free the image data after we are done with it
-				}
-				else
-				{
-					fmt::println("Failed to load image: {}", path);
+					case fastgltf::MimeType::KTX2:
+						FileKTX2(engine, img, path, image.name.c_str());
+						break;
+					default:
+						unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+						BinImg(data, width, height, img, engine, image.name.c_str());
+						break;
 				}
 			},
 			[&](fastgltf::sources::Vector& vector)
 			{
 				Vector++;
-				unsigned char* data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &channels, 4);
-
-				if (data)
+				switch (vector.mimeType)
 				{
-					VkExtent3D imageSize;
-					imageSize.width = width;
-					imageSize.height = height;
-					imageSize.depth = 1;
-					img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::VEC::" + image.name));
-					stbi_image_free(data); //Free the image data after we are done with it
+				case fastgltf::MimeType::KTX2:
+					BinKTX2(engine, img, vector.bytes.data(), vector.bytes.size(), image.name.c_str());
+					break;
+				default:
+					unsigned char* data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &channels, 4);
+					BinImg(data, width, height, img, engine, image.name.c_str());
+					break;
 				}
 			},
 			[&](fastgltf::sources::BufferView& view)
 			{
-				BView++;	
+				BView++;
 				auto& bufferView = asset.bufferViews[view.bufferViewIndex];
 				auto& buffer = asset.buffers[bufferView.bufferIndex];
 
-				std::visit(fastgltf::visitor{
-					[](auto& arg) {},
-					[&](fastgltf::sources::Vector& vector)
-					{
-						unsigned char* data = stbi_load_from_memory(vector.bytes.data() + bufferView.byteOffset,
-							static_cast<int>(bufferView.byteLength),
-							&width, &height, &channels, 4
-							);
-						if (data)
-						{
-							VkExtent3D imageSize;
-							imageSize.width = width;
-							imageSize.height = height;
-							imageSize.depth = 1;
-							img = engine->CreateImage(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, std::string("GLTF::BUFV::" + image.name));
-							stbi_image_free(data); //Free the image data after we are done with it
-						}
-					}
-					}, buffer.data );
+				switch (view.mimeType)
+				{
+				case fastgltf::MimeType::KTX2:
+					KTX2_BufferView(img, engine, buffer, bufferView, image.name.c_str());
+					break;
+				default:
+					IMG_BufferView(width, height, channels, img, engine, buffer, bufferView, image.name.c_str());
+					break;
+				}
 			},
 		},
 	image.data
@@ -180,6 +277,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 		return img; //Return the allocated image
 	}
 }
+#pragma endregion
 
 std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::filesystem::path filepath)
 {
@@ -194,7 +292,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 	LoadedGLTF& file = *loadedScene.get();
 
-	fastgltf::Parser parser;
+	fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_basisu);
 
 	constexpr auto gltfOptions = fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers | fastgltf::Options::AllowDouble | fastgltf::Options::DontRequireValidAssetMember;
 
@@ -266,7 +364,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		file.samplers.push_back(sampler);
 	}
 
-	//Temportary storage for objs
+	//Temporary storage for objs
 	std::vector<std::shared_ptr<MeshAsset>> meshes;
 	std::vector<std::shared_ptr<RenderNode>> renderNodes;
 	std::vector<AllocatedImage> images;
@@ -275,7 +373,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	//Load textures
 	for (fastgltf::Image& img : gltf.images)
 	{
-		if (file.images.count(img.name.c_str())) //If the image is already loaded, rename it.
+		if (file.images.contains(img.name.c_str())) //If the image is already loaded, rename it.
 		{
 			//fmt::println("Image {} already loaded, renaming...", img.name);
 			img.name = "Unknown Image " + std::to_string(unknownImg++);
@@ -324,7 +422,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 		if (mat.alphaMode == fastgltf::AlphaMode::Blend)
 		{
-			//passType = MaterialPass::Transparent;
+			passType = MaterialPass::Transparent;
 		}
 		//TODO : Support more alpha modes
 		else if (mat.alphaMode == fastgltf::AlphaMode::Mask)
@@ -349,7 +447,18 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		//Grab textures
 		if (mat.pbrData.baseColorTexture.has_value())
 		{
-			size_t img = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].imageIndex.value(); //Image ineex
+			auto texture = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex];
+			size_t img = 0;
+
+			if (texture.basisuImageIndex.has_value())
+			{
+				img = texture.basisuImageIndex.value();
+			}
+			else
+			{
+				img = texture.imageIndex.value();
+			}
+
 			auto samplerOptional = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex;
 
 			if (samplerOptional.has_value())
@@ -367,7 +476,18 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 		if (mat.normalTexture.has_value())
 		{
-			size_t img = gltf.textures[mat.normalTexture.value().textureIndex].imageIndex.value(); //Image index
+			auto texture = gltf.textures[mat.normalTexture.value().textureIndex];
+			size_t img = 0;
+
+			if (texture.basisuImageIndex.has_value())
+			{
+				img = texture.basisuImageIndex.value();
+			}
+			else
+			{
+				img = texture.imageIndex.value();
+			}
+
 			auto samplerOptional = gltf.textures[mat.normalTexture.value().textureIndex].samplerIndex;
 			if (samplerOptional.has_value())
 			{
@@ -382,7 +502,18 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 		if (mat.pbrData.metallicRoughnessTexture.has_value())
 		{
-			size_t img = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].imageIndex.value(); //Image index
+			auto texture = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex];
+			size_t img = 0;
+
+			if (texture.basisuImageIndex.has_value())
+			{
+				img = texture.basisuImageIndex.value();
+			}
+			else
+			{
+				img = texture.imageIndex.value();
+			}
+
 			auto samplerOptional = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].samplerIndex;
 			if (samplerOptional.has_value())
 			{
@@ -403,15 +534,21 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 	//Load meshes
 	{
-		Meshes++;
 		std::vector<uint32_t> indices; //we will use the same vecs for all meshes so we don't hammer the memory
 		std::vector<Vertex> vertices;
 
 		for (fastgltf::Mesh& mesh : gltf.meshes)
 		{
+			Meshes++;
 			std::shared_ptr<MeshAsset> newMesh = std::make_shared<MeshAsset>();
 			meshes.push_back(newMesh);
+
+			if (file.meshes.contains(mesh.name.c_str()))
+			{
+				mesh.name = "mesh" + std::to_string(Meshes);
+			}
 			file.meshes[mesh.name.c_str()] = newMesh; //Push mesh into the map
+
 			newMesh->name = mesh.name;
 
 			//Clear the vectors for the new mesh
@@ -596,130 +733,4 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 	fmt::println("Loaded: Materials: {}, Meshes: {}, Samplers: {}", Materials, Meshes, Samplers);
 #endif
 	return loadedScene;
-}
-
-std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGLTFMeshes(VulkanEngine* engine, std::filesystem::path filepath)
-{
-	std::cout << "Loading GTLF: " << filepath << std::endl;
-	fastgltf::GltfDataBuffer data;
-	data.loadFromFile(filepath);
-
-	auto gltfOptions = fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers;
-
-	fastgltf::Asset gltf;
-	fastgltf::Parser parser{};
-
-	auto load = parser.loadBinaryGLTF(&data, filepath.parent_path(), gltfOptions);
-
-	if (load)
-	{
-		gltf = std::move(load.get());
-	}
-	else
-	{
-		fmt::println("Failed to load GLTF: {}", fastgltf::to_underlying(load.error()));
-		return {};
-	}
-
-	//Load meshes
-	std::vector<std::shared_ptr<MeshAsset>> meshes;
-
-	//Use the same vecs for all meshs so we don't hammer the memory
-	std::vector<uint32_t> indices;
-	std::vector<Vertex> vertices;
-
-	for (fastgltf::Mesh& mesh : gltf.meshes)
-	{
-		MeshAsset newMesh;
-
-		newMesh.name = mesh.name;
-
-		indices.clear();
-		vertices.clear();
-
-		for (auto&& p : mesh.primitives)
-		{
-			GeoSurface newSurface;
-			newSurface.startIndex = (uint32_t)indices.size();
-			newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
-
-			size_t initialVert = vertices.size();
-
-			//Load Indexes
-			{
-				fastgltf::Accessor& indexAccessor = gltf.accessors[p.indicesAccessor.value()];
-				indices.reserve(indices.size() + indexAccessor.count);
-
-				fastgltf::iterateAccessor<std::uint32_t>(gltf, indexAccessor, [&](std::uint32_t index)
-				{
-					indices.push_back(index + initialVert);
-				});
-			}
-
-			// load vertex positions
-			{
-				fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
-				vertices.resize(vertices.size() + posAccessor.count);
-
-				fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor, [&](glm::vec3 v, size_t index)
-				{
-					Vertex newVert;
-					newVert.position = v;
-					newVert.normal = { 0, 0, 0 };
-					newVert.color = glm::vec4{ 1.f };
-					newVert.uv_x = 0;
-					newVert.uv_y = 0;
-					vertices[initialVert + index] = newVert;
-				});
-			}
-
-			auto normals = p.findAttribute("NORMAL");
-			if (normals != p.attributes.end())
-			{
-				fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).second],
-					[&](glm::vec3 v, size_t index)
-				{
-					vertices[initialVert + index].normal = v;
-				});
-			}
-
-			auto uv = p.findAttribute("TEXCOORD_0");
-			if (uv != p.attributes.end())
-			{
-				fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).second],
-					[&](glm::vec2 v, size_t index)
-				{
-					vertices[initialVert + index].uv_x = v.x;
-					vertices[initialVert + index].uv_y = v.y;
-				});
-			}
-
-			auto colors = p.findAttribute("COLOR_0");
-			if (colors != p.attributes.end())
-			{
-				fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).second],
-					[&](glm::vec4 v, size_t index)
-				{
-					vertices[initialVert + index].color = v;
-				});
-			}
-
-			newMesh.surfaces.push_back(newSurface);
-		}
-
-		//Display VertNormals
-		constexpr bool OverrideColors = false;
-
-		if (OverrideColors)
-		{
-			for (Vertex& vert : vertices)
-			{
-				vert.color = glm::vec4(vert.normal, 1.0f);
-			}
-		}
-		newMesh.meshBuffers = engine->UploadMesh(indices, vertices);
-
-		meshes.emplace_back(std::make_shared<MeshAsset>(std::move(newMesh)));
-	}
-	return meshes;
 }

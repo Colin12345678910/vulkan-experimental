@@ -48,7 +48,7 @@ setup(engine)
 setup(vk_core)
 
 #Setup dependences for VK_CORE
-target_link_libraries(vk_core PUBLIC vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf)
+target_link_libraries(vk_core PUBLIC vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf ktx)
 target_precompile_headers(vk_core PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <vulkan/vulkan.h>)
 
 #Simple library include for the execution one.

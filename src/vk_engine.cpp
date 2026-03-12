@@ -1266,7 +1266,7 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     GPUMeshBuffers newSurface;
 
     //CreateVertexBuff
-    newSurface.vertexBuffer = CreateBuffer(vertexBuffSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    newSurface.vertexBuffer = CreateBuffer(vertexBuffSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY, "VulkanEngine::UploadMesh::VertexBuffer");
 
     //find the Address of vertexBuffer
 
@@ -1274,7 +1274,7 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAddressInfo);
 
     //Create index buffer
-    newSurface.indexBuffer = CreateBuffer(indexBuffSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    newSurface.indexBuffer = CreateBuffer(indexBuffSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, "VulkanEngine::UploadMesh::IndexBuffer");
 
     AllocatedBuffer staging = CreateBuffer(vertexBuffSize + indexBuffSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
@@ -1630,7 +1630,7 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
     }
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
+AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, int mipLevels, std::string name, int arrayLayers)
 {
     AllocatedImage newImg;
     newImg.imageFormat = format;
@@ -1640,10 +1640,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
     imgInfo.arrayLayers = arrayLayers;
 
-    if (mipmapped)
-    {
-        imgInfo.mipLevels = std::floor(std::log2(std::max(size.width, size.height))) + 1;
-    }
+    imgInfo.mipLevels = mipLevels;
 
     //Setup allocation rules
     VmaAllocationCreateInfo allocInfo{};
@@ -1673,15 +1670,13 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
 AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
 {
-    std::vector<VmaBudget> budgets(VK_MAX_MEMORY_HEAPS);
-    vmaGetHeapBudgets(_allocator, budgets.data());
-
-    if (budgets[0].usage >= budgets[0].budget * 0.7f)
+    int mipLevels = 1;
+    if (mipmapped)
     {
-        return GetDefaultImage();
+        mipLevels = std::floor(std::log2(std::max(size.width, size.height))) + 1;
     }
 
-    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped, name, arrayLayers);
+    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipLevels, name, arrayLayers);
 
 	CopyDataToImage(data, newImg);
 	
@@ -1697,6 +1692,23 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
         }
     });
 
+    return newImg;
+}
+
+AllocatedImage VulkanEngine::CreateMippedImage(std::vector<std::vector<uint8_t>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, std::string name)
+{
+    AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, data.size(), name, 1);
+
+    for (int i = 0; i < data.size(); i++)
+    {
+        auto mip = data[i];
+        newImg = CopyDataToImage(mip.data(), newImg, i, 0, mip.size());
+    }
+
+    ImmediateSubmit([&](VkCommandBuffer cmd)
+    {
+        vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
     return newImg;
 }
 
@@ -1782,8 +1794,7 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
     
     if (fileSize == 0) { fileSize = dataSize; }
     
-    AllocatedBuffer uploadBuff = CreateBuffer(fileSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
+    AllocatedBuffer uploadBuff = CreateBuffer(fileSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, "VulkanEngine::CopyDataToImage::UploadBuf");
     memcpy(uploadBuff.info.pMappedData, data, fileSize);
 
 	//fmt::println("Successfully copied {} bytes to upload staging buffer", dataSize);
@@ -1838,7 +1849,7 @@ void VulkanEngine::DestroyImage(const AllocatedImage& img)
     vmaDestroyImage(_allocator, img.image, img.allocation);
 }
 
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, std::string name)
 {
     VkBufferCreateInfo bufferInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr };
     bufferInfo.size = allocSize;
@@ -1859,6 +1870,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
     AllocatedBuffer buff;
 
     VK_CHECK(vmaCreateBuffer(_allocator, &bufferInfo, &vmaInfo, &buff.buffer, &buff.allocation, &buff.info));
+    vmaSetAllocationName(_allocator, buff.allocation, name.c_str());
 
     return buff;
 }

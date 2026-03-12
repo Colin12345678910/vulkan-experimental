@@ -15,6 +15,28 @@ target_sources(vkbootstrap PRIVATE
   vkbootstrap/VkBootstrap.cpp
   )
 
+#FetchContent
+include(FetchContent)
+
+#LibKTX
+
+FetchContent_Declare(
+    libktx
+    GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+    GIT_TAG        v4.3.2 # Or the latest stable version
+)
+
+# Disable parts of KTX you don't need to keep build times low
+set(KTX_FEATURE_STATIC_LIBRARY ON CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+set(BASISU_SUPPORT_SSE ON CACHE BOOL "" FORCE) # Good for your AMD setup
+
+FetchContent_MakeAvailable(libktx)
+
+#EndLibKTX
+
+
 target_include_directories(vkbootstrap PUBLIC vkbootstrap)
 target_link_libraries(vkbootstrap PUBLIC Vulkan::Vulkan $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
 set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
