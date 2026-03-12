@@ -1,7 +1,7 @@
 #pragma once
-#include <vk_types.h>
-#include <vk_descriptors.h>
-#include <vk_pipelines.h>
+#include <VkTypes.h>
+#include <VkDescriptors.h>
+#include <VkPipelines.h>
 /* GLTFMetalicRoughness
 *	Colin D.
 *	June 2025.

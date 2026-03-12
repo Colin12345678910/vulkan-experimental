@@ -1,4 +1,4 @@
-#include "camera.h"
+#include "Camera.h"
 
 AutoFloatCVar CVAR_CameraSpeed("camera.speed", "Speed of the camera movement", 0.025f);
 

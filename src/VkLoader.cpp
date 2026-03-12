@@ -1,10 +1,10 @@
 ﻿#include "stb_image.h"
 #include <iostream>
-#include <vk_loader.h>
+#include <VkLoader.h>
 
-#include "vk_engine.h"
-#include "vk_initializers.h"
-#include "vk_types.h"
+#include "VkEngine.h"
+#include "VkInitializers.h"
+#include "VkTypes.h"
 #include <glm/gtx/quaternion.hpp>
 #include <ktx.h>
 

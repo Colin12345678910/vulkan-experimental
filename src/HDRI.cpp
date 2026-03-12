@@ -1,6 +1,6 @@
 #include "HDRI.h"
 #include "TBin.h"
-#include "vk_engine.h"
+#include "VkEngine.h"
 #include <stb_image_write.h>
 
 const std::string HDRI_CACHE_PATH = "../../cache/";

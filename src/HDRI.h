@@ -6,7 +6,7 @@
 
 class VulkanEngine;
 #pragma once
-#include <vk_types.h>
+#include <VkTypes.h>
 #include <stb_image.h>
 class HDRI
 {

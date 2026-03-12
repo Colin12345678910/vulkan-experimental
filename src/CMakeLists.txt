@@ -7,21 +7,21 @@ add_executable (engine
 #The source is contained in a static lib that can be attached to several projects.
 
 add_library(vk_core STATIC
-  vk_types.h
-  vk_initializers.cpp
-  vk_initializers.h
-  vk_images.h
-  vk_images.cpp 
-  vk_descriptors.h
-  vk_descriptors.cpp
-  vk_pipelines.h
-  vk_pipelines.cpp
-  vk_engine.h
-  vk_engine.cpp
-  vk_loader.h
-  vk_loader.cpp
-  camera.cpp
-  camera.h
+  VkTypes.h
+  VkInitializers.cpp
+  VkInitializers.h
+  VkImages.h
+  VkImages.cpp 
+  VkDescriptors.h
+  VkDescriptors.cpp
+  VkPipelines.h
+  VkPipelines.cpp
+  VkEngine.h
+  VkEngine.cpp
+  VkLoader.h
+  VkLoader.cpp
+  Camera.cpp
+  Camera.h
   IRenderable.cpp
   IRenderable.h
   RenderNode.cpp

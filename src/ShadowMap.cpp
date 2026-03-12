@@ -1,5 +1,5 @@
 #include "ShadowMap.h"
-#include "vk_engine.h"
+#include "VkEngine.h"
 
 void ShadowMap::CreateShadowMap(VulkanEngine& engine, uint32_t width, uint32_t height)
 {

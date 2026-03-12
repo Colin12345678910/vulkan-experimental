@@ -1,4 +1,4 @@
-/* VK_images
+/* VkImages
 *	Colin D
 *	June 2025
 *	This is honestly a really important class, as it abstracts image conversion, which is a really

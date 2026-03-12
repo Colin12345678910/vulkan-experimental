@@ -1,6 +1,6 @@
 #pragma once
-#include <vk_types.h>
-#include <vk_descriptors.h>
+#include <VkTypes.h>
+#include <VkDescriptors.h>
 /*
 A stub interface for a render pass, allowing us to create different types of render passes.
 We may want to add metadata to this later, but for now it is just a stub.

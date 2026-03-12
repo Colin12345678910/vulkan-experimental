@@ -1,4 +1,4 @@
-﻿/* VK_Loader
+﻿/* VkLoader
 *	Colin D
 *	June 2025
 *	Loads up a GLTF mesh and loads it into a meshAsset, including both a mesh and a surface (which just defines a starting point
@@ -6,7 +6,7 @@
 */
 #pragma once
 #include <RenderNode.h>
-#include <vk_descriptors.h>
+#include <VkDescriptors.h>
 #include <unordered_map>
 #include <filesystem>
 

@@ -1,11 +1,11 @@
 ﻿//> includes
-#include "vk_engine.h"
+#include "VkEngine.h"
 #include "vulkan/vulkan.hpp"
 #include <SDL.h>
 #include <SDL_vulkan.h>
 
-#include <vk_initializers.h>
-#include <vk_types.h>
+#include <VkInitializers.h>
+#include <VkTypes.h>
 
 #include <chrono>
 #include <thread>

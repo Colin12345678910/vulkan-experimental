@@ -6,9 +6,9 @@
 *	by a graphics card.)
 */
 #pragma once 
-#include <vk_types.h>
+#include <VkTypes.h>
 #include <fstream>
-#include <vk_initializers.h>
+#include <VkInitializers.h>
 
 namespace vkutil 
 {

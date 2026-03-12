@@ -1,5 +1,5 @@
 
-#include <vk_types.h>
+#include <VkTypes.h>
 #include <SDL_events.h>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>

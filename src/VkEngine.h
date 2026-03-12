@@ -14,16 +14,16 @@
 #include <imgui_impl_vulkan.h>
 #include <stb_image.h>
 
-#include <vk_types.h>
-#include <vk_descriptors.h>
-#include <vk_loader.h>
+#include <VkTypes.h>
+#include <VkDescriptors.h>
+#include <VkLoader.h>
 #include <unordered_set>
-#include "vk_images.h"
-#include "vk_pipelines.h"
+#include "VkImages.h"
+#include "VkPipelines.h"
 
 #include <GLTFMetalicRoughness.h>
 
-#include "camera.h"
+#include "Camera.h"
 #include <VkBootstrap.h>
 #include "RenderNode.h"
 #include "ShadowMap.h"

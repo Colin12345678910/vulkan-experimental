@@ -1,6 +1,6 @@
 #pragma once
 // A Very basic shadow map implementation/
-#include <vk_types.h>
+#include <VkTypes.h>
 #include <IRenderpass.h>
 class VulkanEngine;
 
