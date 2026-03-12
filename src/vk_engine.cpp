@@ -1670,13 +1670,6 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
 AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name, int arrayLayers)
 {
-    //std::vector<VmaBudget> budgets(VK_MAX_MEMORY_HEAPS);
-    //vmaGetHeapBudgets(_allocator, budgets.data());
-
-    //if (budgets[0].usage >= budgets[0].budget * 0.7f)
-    //{
-    //    return GetDefaultImage();
-    //}
     int mipLevels = 1;
     if (mipmapped)
     {
