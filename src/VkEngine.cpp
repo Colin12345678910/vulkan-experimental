@@ -78,7 +78,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Debug_CallBack(VkDebugUtilsMessageSeverityFlagBit
     fmt::print(fmt::fg(GetColorSeverity(messageSeverity)), "[{}]: {}\n{}\n", ms, mt, pCallbackData->pMessage);
 
     if (messageType != 4) {
-        __debugbreak();
+        //__debugbreak();
 	}
 
     return VK_FALSE; // Applications must return false here
@@ -135,11 +135,11 @@ void VulkanEngine::init(ExitInstructions instructions)
 
     InitializeImgui();
 
-    hdri.LoadHDRI("../../assets/hdri/base.hdr", this);
+    hdri.LoadHDRI("../assets/hdri/base.hdr", this);
 
     InitializeDefaultData();
 
-    std::string structurePath = "..\\..\\assets\\Sponza.gltf"; //structure arena
+    std::string structurePath = "../assets/Sponza.gltf"; //structure arena
 
     if (instructions.relaunch)
     {
@@ -147,7 +147,7 @@ void VulkanEngine::init(ExitInstructions instructions)
     }
 	auto structure = loadGLTF(this, structurePath);
 
-	assert(structure.has_value(), "Failed to load structure glb file");
+	//assert(structure.has_value(), "Failed to load structure glb file");
 
 	loadedScenes["structure"] = structure.value();
 
@@ -223,6 +223,7 @@ void VulkanEngine::draw()
     
     // Acquire next image 
     VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, GetCurrentFrame()._swapchainSemaphore, nullptr, &swapchainImageIndex);
+
     if (e == VK_ERROR_OUT_OF_DATE_KHR || e == VK_SUBOPTIMAL_KHR)
     {
         requestResize = true;
@@ -688,12 +689,15 @@ void VulkanEngine::InitializeSwapchain()
 
     VkExtent3D drawImageExtent =
     {
-        w,
-        h,
+        (uint32_t)w,
+        (uint32_t)h,
         //std::max(_windowExtent.width, (uint32_t)w),
         //std::max(_windowExtent.height, (uint32_t)h),
         1
     };
+
+    _drawExtent.height = h;
+    _drawExtent.width = w;
 
     _drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     _drawImage.imageExtent = drawImageExtent;
@@ -919,11 +923,11 @@ void VulkanEngine::InitializeBackgroundPipelines()
     //Create Shaader
     VkShaderModule computeShader;
     VkShaderModule skyShader;
-    if (!vkutil::LoadShaderModule("../../shaders/gradient_color.comp.spv", _device, &computeShader))
+    if (!vkutil::LoadShaderModule("../shaders/gradient_color.comp.spv", _device, &computeShader))
     {
         fmt::println("Error when building a compute shader");
     }
-    if (!vkutil::LoadShaderModule("../../shaders/sky.comp.spv", _device, &skyShader))
+    if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
     {
         fmt::println("Error when building a compute shader");
     }
@@ -1083,13 +1087,13 @@ void VulkanEngine::ResizeSwapchain()
 void VulkanEngine::InitializeMeshPipeline()
 {
     VkShaderModule triangleFrag;
-    std::string filePath = "../../shaders/Shadow.frag.spv";
+    std::string filePath = "../shaders/Shadow.frag.spv";
     if (!vkutil::LoadShaderModule(filePath.c_str(), _device, &triangleFrag))
     {
         fmt::print("Failed to generate shader ");
         fmt::println("{}", filePath);
     }
-    filePath = "../../shaders/Shadow.vert.spv";
+    filePath = "../shaders/Shadow.vert.spv";
     VkShaderModule triangleVert;
     if (!vkutil::LoadShaderModule(filePath.c_str(), _device, &triangleVert))
     {
@@ -1171,7 +1175,7 @@ void VulkanEngine::InitializeDefaultImages()
 
     _errorImage = CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
-    const std::string root("../../assets/environment/clouds/perlin.png");
+    const std::string root("../assets/environment/clouds/perlin.png");
     int32_t w, h, channels;
     unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
 	_noiseImage = CreateImage(data, VkExtent3D{ (uint32_t)w, (uint32_t)h, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);

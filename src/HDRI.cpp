@@ -3,7 +3,7 @@
 #include "VkEngine.h"
 #include <stb_image_write.h>
 
-const std::string HDRI_CACHE_PATH = "../../cache/";
+const std::string HDRI_CACHE_PATH = "../cache/";
 const std::string HDRI_IRRADIANCE_FILE = HDRI_CACHE_PATH + "irradiance.bin";
 const std::string HDRI_PREFILTERED_FILE = HDRI_CACHE_PATH + "prefilteredEnvMap.bin";
 const std::string HDRI_BRDFLUT_FILE = HDRI_CACHE_PATH + "brdfLUT.bin";
@@ -77,7 +77,7 @@ bool HDRI::GenerateRadianceCubemap(VulkanEngine* engine, const char* filepath)
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, false, "HDRI::irradiance");
 
 	VkShaderModule computeShader;
-	if (!vkutil::LoadShaderModule("../../shaders/convolution.comp.spv", engine->_device, &computeShader))
+	if (!vkutil::LoadShaderModule("../shaders/convolution.comp.spv", engine->_device, &computeShader))
 	{
 		fmt::println("Error when building a compute shader for HDRI convolution");
 	}
@@ -149,7 +149,7 @@ bool HDRI::GeneratePrefilteredEnvMap(VulkanEngine* engine, const char* filepath)
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, true, "HDRI::prefilteredEnvMap");
 
 	VkShaderModule computeShader;
-	if (!vkutil::LoadShaderModule("../../shaders/prefilter.comp.spv", engine->_device, &computeShader))
+	if (!vkutil::LoadShaderModule("../shaders/prefilter.comp.spv", engine->_device, &computeShader))
 	{
 		fmt::println("Error when building a compute shader for HDRI convolution");
 	}
@@ -256,7 +256,7 @@ bool HDRI::GenerateBRDFLUT(VulkanEngine* engine)
 
 	// Create compute shader
 	VkShaderModule computeShader;
-	if (!vkutil::LoadShaderModule("../../shaders/BDRF.comp.spv", engine->_device, &computeShader))
+	if (!vkutil::LoadShaderModule("../shaders/BDRF.comp.spv", engine->_device, &computeShader))
 	{
 		fmt::println("Error when building a compute shader for HDRI convolution");
 	}

@@ -214,7 +214,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 				assert(filePath.fileByteOffset == 0); //We don't support offsets with
 				assert(filePath.uri.isLocalPath()); //We cannot load remote images
 
-				const std::string root("../../assets/textures/");
+				const std::string root("../assets/textures/");
 				std::string path(filePath.uri.path().begin(), filePath.uri.path().end());
 
 				path = root + path; //Prepend the root path to the image path
@@ -358,10 +358,10 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 			ExtractMipmapMode(sampler.minFilter.value_or(fastgltf::Filter::Nearest))
 			);
 
-		VkSampler sampler;
-		vkCreateSampler(engine->_device, &samplerInfo, nullptr, &sampler);
+		VkSampler samp;
+		vkCreateSampler(engine->_device, &samplerInfo, nullptr, &samp);
 
-		file.samplers.push_back(sampler);
+		file.samplers.push_back(samp);
 	}
 
 	//Temporary storage for objs

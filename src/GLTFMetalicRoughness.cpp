@@ -4,17 +4,17 @@
 void GLTFMetallicRoughness::BuildPipelines(VulkanEngine* engine)
 {
     VkShaderModule meshFragShader;
-    if (!vkutil::LoadShaderModule("../../shaders/mesh.frag.spv", engine->_device, &meshFragShader))
+    if (!vkutil::LoadShaderModule("../shaders/mesh.frag.spv", engine->_device, &meshFragShader))
     {
         fmt::println("Error when building mesh.frag.spv");
     }
     VkShaderModule meshVertexShader;
-    if (!vkutil::LoadShaderModule("../../shaders/mesh.vert.spv", engine->_device, &meshVertexShader))
+    if (!vkutil::LoadShaderModule("../shaders/mesh.vert.spv", engine->_device, &meshVertexShader))
     {
         fmt::println("Error when building mesh.vert.spv");
     }
 	VkShaderModule cutoutFragmentShader;
-    if (!vkutil::LoadShaderModule("../../shaders/mesh_cutout.frag.spv", engine->_device, &cutoutFragmentShader))
+    if (!vkutil::LoadShaderModule("../shaders/mesh_cutout.frag.spv", engine->_device, &cutoutFragmentShader))
     {
 		fmt::println("Error when building mesh_cutout.frag.spv");
     }

@@ -35,7 +35,7 @@ add_library(vk_core STATIC
   IRenderpass.h
   HDRI.cpp
   HDRI.h
-  Tbin.h
+  TBin.h
 )
 
 function(setup executable) #Basically just assign the correct CXX standards.
@@ -54,10 +54,10 @@ target_precompile_headers(vk_core PUBLIC <optional> <vector> <memory> <string> <
 #Simple library include for the execution one.
 target_link_libraries(engine PUBLIC vk_core)
 
-add_custom_command(TARGET engine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
-  COMMAND_EXPAND_LISTS
-  )
+#add_custom_command(TARGET engine POST_BUILD
+#  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
+#  COMMAND_EXPAND_LISTS
+#  )
 
 ########## Testing
 ## Maybe move to diff proj?

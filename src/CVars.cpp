@@ -105,30 +105,6 @@ public:
 	template<typename T>
 	CVarArray<T>* GetCVarArray();
 
-	template<>
-	CVarArray<int32_t>* GetCVarArray<int32_t>()
-	{
-		return &intCVars;
-	}
-
-	template<>
-	CVarArray<float>* GetCVarArray<float>()
-	{
-		return &floatCVars;
-	}
-
-	template<>
-	CVarArray<std::string>* GetCVarArray<std::string>()
-	{
-		return &stringCVars;
-	}
-
-	template<>
-	CVarArray<bool>* GetCVarArray<bool>()
-	{
-		return &boolCVars;
-	}
-
 	template<typename T>
 	T* GetCVarCurrent(uint32_t hash)
 	{
@@ -155,6 +131,28 @@ private:
 	CVarParameter* InitCVar(const char* name, const char* description);
 	std::unordered_map<size_t, CVarParameter> cvarMap;
 };
+
+template<>
+CVarArray<int32_t>* CVarImpl::GetCVarArray()
+{
+	return &this->intCVars;
+}
+template<>
+CVarArray<std::string>* CVarImpl::GetCVarArray()
+{
+	return &this->stringCVars;
+}
+template<>
+CVarArray<float>* CVarImpl::GetCVarArray()
+{
+	return &this->floatCVars;
+}
+template<>
+CVarArray<bool>* CVarImpl::GetCVarArray()
+{
+	return &this->boolCVars;
+}
+
 /// <summary>
 /// A Statically accessible instance of a CVAR, we will store all CVars inside this instance.
 /// This is a singleton pattern.

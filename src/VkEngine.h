@@ -28,6 +28,7 @@
 #include "RenderNode.h"
 #include "ShadowMap.h"
 #include "HDRI.h"
+#include <forward_list>
 
 constexpr unsigned int FRAME_OVERLAP = 3;
 
