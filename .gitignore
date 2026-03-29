@@ -2,5 +2,6 @@
 /bin
 /assets/arena.glb
 /out
+/lin_out
 /.vs
 /build_test

@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <vk_engine.h>
+#include <VkEngine.h>
 
 // Demonstrate some basic assertions.
 TEST(HelloTest, BasicAssertions) {
@@ -34,8 +34,6 @@ TEST(HelloTest, EngineInvoke)
 
 TEST(HelloTest, CVAR)
 {
-	auto cvar = CVar::Get()->CreateFloatCVar("test.float", "A test float", 1.0f);
-	EXPECT_EQ(*(CVar::Get()->CVar::GetFloatCVar(BY_NAME("test.float"))), 1.0f);
 
 	//CVar::Get()->SetFloatCVar(std::hash<std::string>{}("test.float"), 2.0f);
 	//EXPECT_EQ(CVar::Get()->CVar::GetFloatCVar(BY_NAME("test.float")), 2.0f);

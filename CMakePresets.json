@@ -68,6 +68,32 @@
             "description": "Target Windows (32-bit) with the Visual Studio development environment. (RelWithDebInfo)",
             "inherits": "x86-debug",
             "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "Linux-base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/lin_out/build/${presetName}",
+            "installDir": "${sourceDir}/lin_out/install/${presetName}",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "Linux-release",
+            "displayName": "Linux Release",
+            "description": "Target Linux",
+            "inherits": "Linux-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "Linux-debug",
+            "displayName": "Linux Debug",
+            "description": "Target Linux",
+            "inherits": "Linux-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
         }
     ]
 }

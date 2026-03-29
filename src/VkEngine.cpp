@@ -329,7 +329,7 @@ void VulkanEngine::draw()
     VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, GetCurrentFrame()._swapchainSemaphore);
     //according to VK Spec, the signalled semaphore must be from the swapChainimageIndex and not current inflight frame.
     // https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html 
-    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, _frames[swapchainImageIndex]._renderSemaphore);
+    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, _frames[swapchainImageIndex % FRAME_OVERLAP]._renderSemaphore);
 
     VkSubmitInfo2 submit = vkinit::submit_info(&cmdInfo, &signalInfo, &waitInfo);
     
@@ -342,7 +342,7 @@ void VulkanEngine::draw()
     presentInfo.pSwapchains = &_swapchain;
     presentInfo.swapchainCount = 1;
 
-    presentInfo.pWaitSemaphores = &_frames[swapchainImageIndex]._renderSemaphore;
+    presentInfo.pWaitSemaphores = &_frames[swapchainImageIndex % FRAME_OVERLAP]._renderSemaphore;
     presentInfo.waitSemaphoreCount = 1;
 
     presentInfo.pImageIndices = &swapchainImageIndex;
@@ -1893,9 +1893,10 @@ void VulkanEngine::CreateSwapchain()
     vkb::Swapchain vkbSwapchain = swapchainBuilder
         .set_desired_format(VkSurfaceFormatKHR{ .format = _swapchainImageFormat, .colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR })
         //Vsync present mode.
-        .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+        .set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
         .set_desired_extent(_windowExtent.width, _windowExtent.height)
         .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+        .set_desired_min_image_count(FRAME_OVERLAP)
         .build().value();
 
     //Store swapchain information.
