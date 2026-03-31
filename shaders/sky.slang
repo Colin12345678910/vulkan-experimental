@@ -43,42 +43,116 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
     float3 rd = normalize(mul((float3x3)pushConstants.view, rayView));
     float3 ro = pushConstants.cameraPos.xyz;
 
-    float denom = dot(rd, planeNormal);
+    image[texelCoord] = float4(0.0);
 
-    float4 col = pushConstants.data1;
+    RayMarch(ro, rd, (float3 hitPos, float3 normal, float amount) => {
+                         image[texelCoord] = float4(0.5) + mul(normal, normalize(float3(1.0, 1.0, 0.5)));
+    });
 
-    if (denom > 0.01)
-    {
-        float t = dot(planePoint - ro, planeNormal) / denom;
+    // float denom = dot(rd, planeNormal);
 
-        if (t > 0.0)
-        {
-            float3 hitPos = ro + rd * t;
+    // float4 col = pushConstants.data1;
 
-            float2 skyUV = hitPos.xz * 0.001;
-            float clouds = noise(skyUV);
+    // if (denom > 0.01)
+    // {
+    //     float t = dot(planePoint - ro, planeNormal) / denom;
 
-            col = col + clouds;
-        }
-    }
+    //     if (t > 0.0)
+    //     {
+    //         float3 hitPos = ro + rd * t;
 
-    // Sun
+    //         float2 skyUV = hitPos.xz * 0.001;
+    //         float clouds = noise(skyUV);
 
-    float3 lDirection = normalize(float3(-.8, .8, -.3));
-    float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
+    //         col = col + clouds;
+    //     }
+    // }
 
-    float3 sun = 0.25 * float3(1.0, 0.8, 0.4) * pow(sunDot, 5.0);
-    sun += 0.25 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
-    sun += 0.2 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
+    // // Sun
 
-    col += float4(sun, 0.0f);
+    // float3 lDirection = normalize(float3(-.8, .8, -.3));
+    // float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
 
-    image[texelCoord] = col;
+    // float3 sun = 0.25 * float3(1.0, 0.8, 0.4) * pow(sunDot, 5.0);
+    // sun += 0.25 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
+    // sun += 0.2 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
+
+    // col += float4(sun, 0.0f);
+
+    // image[texelCoord] = col;
+    
 }
 
-float noise(float2 uv)
+float noise(float3 uv)
 {
-    uv.x += pushConstants.data4.z;
-    uv.y += pushConstants.data4.z;
-    return cloudTex.SampleLevelZero(uv).x;
+    uv.x += uv.y * 0.05;
+    return cloudTex.SampleLevelZero(uv.xz).x;
+}
+
+void RayMarch(float3 ro, float3 rd, IFunc<void, float3, float3, float> OnSuccess)
+{
+    float t = 0.0;
+    float amount = 0.0;
+    float3 p = float3(0);
+
+    for (int i = 0; i < 100; i++)
+    {
+        p = ro + rd * t;
+        float d = map(p);
+
+        if (d < 0.001)
+        {
+            amount += pushConstants.data3.x;
+            OnSuccess(p, getNormal(p), amount);
+            break;
+        }
+
+        t += d * 0.5;
+        
+        if (t > 250.0)
+            break;
+    }
+}
+
+
+// A Testing cloud map.
+float map(float3 p)
+{
+    float3 cubehalfSize = float3(1000, 1, 1000);
+
+    float cube = sdBox(p - float3(0), cubehalfSize);
+
+    //Scales the noise
+    float noiseScale = pushConstants.data2.x;
+
+    float3 uvw = p * noiseScale;
+
+    float cloudCutout = noise(uvw) - pushConstants.data2.y;
+
+    cloudCutout = cloudCutout / noiseScale;
+
+    //Boolean subtract the cloud
+    float distance = max(cube, -cloudCutout);
+    return distance;
+}
+
+//SDF variant of getNormal
+float3 getNormal(float3 p)
+{
+    const float eps = pushConstants.data2.z;
+    const float2 h = float2(eps, 0);
+
+    float3 n = map(p) - float3(
+                                  map(p - h.xyy),
+                                  map(p - h.yxy),
+                                  map(p - h.yyx),
+    );
+
+    return normalize(n);
+}
+
+float sdBox(float3 p, float3 b)
+{
+    float3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }

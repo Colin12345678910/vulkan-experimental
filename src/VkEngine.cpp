@@ -145,11 +145,11 @@ void VulkanEngine::init(ExitInstructions instructions)
     {
         structurePath = instructions.scenePath;
     }
-	auto structure = loadGLTF(this, structurePath);
+	//auto structure = loadGLTF(this, structurePath);
 
 	//assert(structure.has_value(), "Failed to load structure glb file");
 
-	loadedScenes["structure"] = structure.value();
+	//loadedScenes["structure"] = structure.value();
 
     // Load Shadowmaps
     shadowMap.Init();
@@ -1466,7 +1466,7 @@ void VulkanEngine::UpdateScene()
     glm::mat4 scale = glm::scale(glm::vec3(CVAR_SceneSize.Get()));
     glm::mat4 translation = glm::translate(glm::vec3(0, 0, 0));
 
-    loadedScenes["structure"]->Draw(scale * translation, mainDrawCtx);
+    //loadedScenes["structure"]->Draw(scale * translation, mainDrawCtx);
 
     //Camera
 #ifndef PERFORMANCE_TEST
