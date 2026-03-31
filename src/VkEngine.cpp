@@ -927,7 +927,7 @@ void VulkanEngine::InitializeBackgroundPipelines()
     {
         fmt::println("Error when building a compute shader");
     }
-    if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
+    if (!vkutil::LoadShaderModule("../shaders/sky.slang.spv", _device, &skyShader))
     {
         fmt::println("Error when building a compute shader");
     }
