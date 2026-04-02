@@ -1,5 +1,5 @@
 RWTexture2D<float4> image;
-Sampler2D cloudTex;
+Sampler3D cloudTex;
 
 // push constants block
 struct PushConstants
@@ -25,8 +25,10 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
     image.GetDimensions(size.x, size.y);
 
     float2 uv = float2(texelCoord) / float2(size);
-    uv = uv * 2.0 - 1.0;
+    // uv = uv * 2.0 - 1.0;
     uv.x *= float(size.x) / float(size.y);
+
+    float3 lDirection = normalize(float3(-.8, .8, -.3));
 
     // Clouds
     const float CLOUD_HEIGHT = 100.0;
@@ -40,44 +42,25 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
     float4 viewRay = mul(pushConstants.invProj, clip);
     float3 rayView = normalize(viewRay.xyz / viewRay.w);
 
+    //Ray origin & direction
     float3 rd = normalize(mul((float3x3)pushConstants.view, rayView));
     float3 ro = pushConstants.cameraPos.xyz;
 
     image[texelCoord] = float4(0.0);
 
-    RayMarch(ro, rd, (float3 hitPos, float3 normal, float amount) => {
-                         image[texelCoord] = float4(0.5) + mul(normal, normalize(float3(1.0, 1.0, 0.5)));
-    });
+    RayMarch(ro, rd, lDirection, texelCoord);
 
-    // float denom = dot(rd, planeNormal);
+    float4 col = pushConstants.data1;
 
-    // float4 col = pushConstants.data1;
+    // Sun
 
-    // if (denom > 0.01)
-    // {
-    //     float t = dot(planePoint - ro, planeNormal) / denom;
+    float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
 
-    //     if (t > 0.0)
-    //     {
-    //         float3 hitPos = ro + rd * t;
+    float3 sun = 0.25 * float3(1.0, 0.8, 0.4) * pow(sunDot, 5.0);
+    sun += 0.25 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
+    sun += 0.2 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
 
-    //         float2 skyUV = hitPos.xz * 0.001;
-    //         float clouds = noise(skyUV);
-
-    //         col = col + clouds;
-    //     }
-    // }
-
-    // // Sun
-
-    // float3 lDirection = normalize(float3(-.8, .8, -.3));
-    // float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
-
-    // float3 sun = 0.25 * float3(1.0, 0.8, 0.4) * pow(sunDot, 5.0);
-    // sun += 0.25 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
-    // sun += 0.2 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
-
-    // col += float4(sun, 0.0f);
+    image[texelCoord] += col + float4(sun, 0.0f);
 
     // image[texelCoord] = col;
     
@@ -85,58 +68,78 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
 
 float noise(float3 uv)
 {
-    uv.x += uv.y * 0.05;
-    return cloudTex.SampleLevelZero(uv.xz).x;
+    float3 u = uv;
+    u.x += pushConstants.data4.z % 256;
+    u.z -= pushConstants.data4.z % 256;
+    return cloudTex.SampleLevelZero(u).x * cloudTex.SampleLevelZero(u * 0.1).x;
 }
 
-void RayMarch(float3 ro, float3 rd, IFunc<void, float3, float3, float> OnSuccess)
+void RayMarch(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
 {
-    float t = 0.0;
+    //If our ray is below the horizon, skip it.
+    if (rd.y <= 0)
+    {
+        return;
+    }
+
+    //Calculate where the ray should be cast/marched from, this is the point where the ray from the camera would intersect our cloud "plane"
+    float startT = (pushConstants.cameraPos.y + 25 - ro.y) / rd.y;
+    float t = startT;
+
+    if (startT > 1000) return; //Put a cap on max cloud distance.
+
     float amount = 0.0;
     float3 p = float3(0);
 
-    for (int i = 0; i < 100; i++)
+    //Unrolling the loop seemed to bring extra performance, (possible placebo.)
+    [unroll]
+    for (int i = 0; i < 32; i++)
     {
+        //Ray position
         p = ro + rd * t;
+
+        // Distance equation
         float d = map(p);
 
+        //If our distance is small, we've hit something
         if (d < 0.001)
         {
             amount += pushConstants.data3.x;
-            OnSuccess(p, getNormal(p), amount);
+            // Basic diffuse lighting.
+            float4 col = float4(0.75);
+            col += mul(getNormal(p), lDirection);
+            image[texelCoord] = col;
             break;
         }
 
-        t += d * 0.5;
-        
-        if (t > 250.0)
+        //Step an defined amount
+        t += d * pushConstants.data2.w;
+
+        //If our ray marches too far past our start distance, cull the ray.
+        if (t > startT + 100)
             break;
     }
 }
 
-
 // A Testing cloud map.
 float map(float3 p)
 {
-    float3 cubehalfSize = float3(1000, 1, 1000);
-
-    float cube = sdBox(p - float3(0), cubehalfSize);
-
     //Scales the noise
     float noiseScale = pushConstants.data2.x;
-
     float3 uvw = p * noiseScale;
 
+    //Calculate our distance.
     float cloudCutout = noise(uvw) - pushConstants.data2.y;
-
+    //Scale our distance back
     cloudCutout = cloudCutout / noiseScale;
 
-    //Boolean subtract the cloud
-    float distance = max(cube, -cloudCutout);
-    return distance;
+    //return the negative or "cutout"
+    return -cloudCutout;
 }
 
-//SDF variant of getNormal
+//SDF getNormal
+//TODO: Pre-compute this normals calculation when loading a cloud texture for the first time
+//Pack normals in RGB, and noise value in A.
 float3 getNormal(float3 p)
 {
     const float eps = pushConstants.data2.z;
@@ -149,10 +152,4 @@ float3 getNormal(float3 p)
     );
 
     return normalize(n);
-}
-
-float sdBox(float3 p, float3 b)
-{
-    float3 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }

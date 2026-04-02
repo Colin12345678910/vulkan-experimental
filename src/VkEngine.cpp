@@ -145,11 +145,11 @@ void VulkanEngine::init(ExitInstructions instructions)
     {
         structurePath = instructions.scenePath;
     }
-	//auto structure = loadGLTF(this, structurePath);
+	auto structure = loadGLTF(this, structurePath);
 
 	//assert(structure.has_value(), "Failed to load structure glb file");
 
-	//loadedScenes["structure"] = structure.value();
+	loadedScenes["structure"] = structure.value();
 
     // Load Shadowmaps
     shadowMap.Init();
@@ -961,7 +961,8 @@ void VulkanEngine::InitializeBackgroundPipelines()
     sky.data = {};
 
     //Default params
-    sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+    sky.data.data1 = glm::vec4(0.3, 0.4, 0.9, 0.97);
+    sky.data.data2 = glm::vec4(0.005, 0.3, 50, 1.0);
 
     VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
 
@@ -1175,10 +1176,32 @@ void VulkanEngine::InitializeDefaultImages()
 
     _errorImage = CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
-    const std::string root("../assets/environment/clouds/perlin.png");
+    const std::string root("../assets/environment/clouds/perlin_3D.png");
     int32_t w, h, channels;
     unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
-	_noiseImage = CreateImage(data, VkExtent3D{ (uint32_t)w, (uint32_t)h, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    
+    const int CLOUD_TEX_SIZE = 256;
+    const int TEX_SIZE = 4096;
+    const int SLICE = TEX_SIZE / CLOUD_TEX_SIZE;
+
+    std::vector<uint8_t> d(CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * 4);
+
+    for (int z = 0; z < CLOUD_TEX_SIZE; ++z)
+    {
+        int gridX = (z % SLICE) * CLOUD_TEX_SIZE;
+        int gridY = (z / SLICE) * CLOUD_TEX_SIZE;
+
+        for (int y = 0; y < CLOUD_TEX_SIZE; ++y)
+        {
+            uint8_t* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
+
+            uint8_t* dst = d.data() + (z * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE + y * CLOUD_TEX_SIZE) * 4;
+
+            memcpy(dst, src, CLOUD_TEX_SIZE * 4);
+        }
+    }
+
+	_noiseImage = CreateImage(d.data(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     VkSamplerCreateInfo sampl{ .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 
@@ -1466,7 +1489,7 @@ void VulkanEngine::UpdateScene()
     glm::mat4 scale = glm::scale(glm::vec3(CVAR_SceneSize.Get()));
     glm::mat4 translation = glm::translate(glm::vec3(0, 0, 0));
 
-    //loadedScenes["structure"]->Draw(scale * translation, mainDrawCtx);
+    loadedScenes["structure"]->Draw(scale * translation, mainDrawCtx);
 
     //Camera
 #ifndef PERFORMANCE_TEST
@@ -1639,7 +1662,11 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     AllocatedImage newImg;
     newImg.imageFormat = format;
     newImg.imageExtent = size;
-	newImg.imageFlags = VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT;
+
+    if (size.depth <= 1)
+    {
+        newImg.imageFlags = VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT;
+    }
 
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
     imgInfo.arrayLayers = arrayLayers;
@@ -1666,6 +1693,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     //Build the imageview
     VkImageViewCreateInfo viewInfo = vkinit::imageview_create_info(format, newImg.image, aspectFlags);
     viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
+    viewInfo.viewType = size.depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
 
     VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &newImg.imageView));
 
@@ -1803,10 +1831,6 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
 
 	//fmt::println("Successfully copied {} bytes to upload staging buffer", dataSize);
 
-    if (fileSize != dataSize)
-    {
-        // We have additional mips to draw from the file.
-    }
     ImmediateSubmit([&](VkCommandBuffer cmd)
     {
         vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); //Transition our image into one that can be written to.
