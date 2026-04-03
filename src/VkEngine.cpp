@@ -963,7 +963,8 @@ void VulkanEngine::InitializeBackgroundPipelines()
 
     //Default params
     advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
-    advSky.data.data2 = glm::vec4(0.005, 0.3, 1, 0.5);
+    advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
+    advSky.data.data3 = glm::vec4(5, 0.01, 0, 0);
 
     VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
 

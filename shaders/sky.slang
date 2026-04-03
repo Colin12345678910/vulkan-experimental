@@ -56,13 +56,13 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
 
     // Sun
 
-    RayMarch(ro, rd, lDirection, texelCoord);
+    RayMarch_Transmissive(ro, rd, lDirection, texelCoord);
 
     float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
 
-    float3 sun = 0.25 * float3(1.0, 0.8, 0.4) * pow(sunDot, 5.0);
-    sun += 0.25 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
-    sun += 0.2 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
+    float3 sun = 0.5 * float3(1.0, 0.8, 0.4) * pow(sunDot, 5.0);
+    sun += 0.5 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
+    sun += 0.4 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
 
     image[texelCoord] += float4(sun, 0.0f);
 
@@ -123,19 +123,79 @@ void RayMarch(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
     }
 }
 
+void RayMarch_Transmissive(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
+{
+    // If our ray is below the horizon, skip it.
+    if (rd.y <= 0)
+    {
+        return;
+    }
+
+    // Calculate where the ray should be cast/marched from, this is the point where the ray from the camera would intersect our cloud "plane"
+    float startT = (25 - ro.y) / rd.y;
+    float t = startT;
+
+    float rayDistance = pushConstants.data3.x;
+
+    if (startT > 1000) return; // Put a cap on max cloud distance.
+ 
+    float3 p = float3(0);
+    float4 res = float4(0);
+
+    // Unrolling the loop seemed to bring extra performance, (possible placebo.)
+    [unroll]
+    for (int i = 0; i < 32; i++)
+    {
+        // Ray position
+        p = ro + rd * t;
+
+        // Distance equation
+        float d = map(p);
+
+        d *= pushConstants.data3.y;
+
+        // If our distance is small, we've hit something
+        if (d > 0.0)
+        {
+            // Basic diffuse lighting.
+            float4 col = float4(lerp(float3(pushConstants.data2.z), float3(0.1), d), d);
+            col.rgb *= col.a;
+            res += col * (1.0 - res.a);
+
+            if (res.x >= 1.0)
+            {
+                clamp(res, float4(0.0), float4(1.0));
+                break;
+            }
+        }
+
+        // Step an defined amount
+        t += rayDistance;
+
+        // If our ray marches too far past our start distance, cull the ray.
+        if (t > startT + 1000)
+            break;
+    }
+
+    image[texelCoord] += float4(res.rgb, 1.0);
+}
+
+float sdSphere(float3 p, float radius) {
+    return length(p) - radius;
+}
 // A Testing cloud map.
 float map(float3 p)
 {
-    //Scales the noise
+    // Scales the noise
     float noiseScale = pushConstants.data2.x;
     float3 uvw = p * noiseScale;
 
-    //Calculate our distance.
+    // Calculate our distance.
     float cloudCutout = noise(uvw) - pushConstants.data2.y;
-    //Scale our distance back
+    // Scale our distance back
     cloudCutout = cloudCutout / noiseScale;
 
-    //return the negative or "cutout"
+    // return the negative or "cutout"
     return -cloudCutout;
 }
 
