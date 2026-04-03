@@ -135,7 +135,7 @@ public:
 	std::unordered_map < std::string, std::shared_ptr<RenderNode>> loadedNodes;
 	
 	//VkPipeline _gradientPipeline;
-	VkPipelineLayout _gradientPipelineLayout;
+	VkPipelineLayout _computePipelineLayout;
 
 	//Here's our basic ShaderLayouts
 	VkPipelineLayout _meshPipelineLayout;

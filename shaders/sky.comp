@@ -13,6 +13,7 @@ layout( push_constant ) uniform constants
  vec4 data3;
  vec4 data4;
  vec4 cameraPos;
+ ivec4 screenDimensions;
  mat4 view;
  mat4 invProj;
 } PushConstants;
@@ -31,7 +32,7 @@ void main()
 {
 	ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 
-	ivec2 size = imageSize(image);
+	ivec2 size = PushConstants.screenDimensions.xy;
 	
 	vec2 uv = vec2(texelCoord) / vec2(size);
 	uv = uv * 2.0 - 1.0;

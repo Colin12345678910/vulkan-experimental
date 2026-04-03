@@ -9,6 +9,7 @@ struct PushConstants
     float4 data3;
     float4 data4;
     float4 cameraPos;
+    int4 screenDimensions;
     float4x4 view;
     float4x4 invProj;
 };
@@ -22,7 +23,7 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
     int2 texelCoord = dispatchThreadID;
 
     int2 size;
-    image.GetDimensions(size.x, size.y);
+    size = pushConstants.screenDimensions.xy;
 
     float2 uv = float2(texelCoord) / float2(size);
     // uv = uv * 2.0 - 1.0;
@@ -48,11 +49,14 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
 
     image[texelCoord] = float4(0.0);
 
-    RayMarch(ro, rd, lDirection, texelCoord);
-
-    float4 col = pushConstants.data1;
+    image[texelCoord] = pushConstants.data1 + // Skycol
+                        pushConstants.data1 * (1.0 - abs(rd.y)) +
+                        pushConstants.data1 * pow((1.0 - abs(rd.y)), 10) +
+                        pushConstants.data1 * pow((1.0 - abs(rd.y)), 25);
 
     // Sun
+
+    RayMarch(ro, rd, lDirection, texelCoord);
 
     float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
 
@@ -60,7 +64,7 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
     sun += 0.25 * float3(1.0, 0.8, 0.6) * pow(sunDot, 64.0);
     sun += 0.2 * float3(1.0, 0.8, 0.6) * pow(sunDot, 512.0);
 
-    image[texelCoord] += col + float4(sun, 0.0f);
+    image[texelCoord] += float4(sun, 0.0f);
 
     // image[texelCoord] = col;
     
@@ -83,12 +87,11 @@ void RayMarch(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
     }
 
     //Calculate where the ray should be cast/marched from, this is the point where the ray from the camera would intersect our cloud "plane"
-    float startT = (pushConstants.cameraPos.y + 25 - ro.y) / rd.y;
+    float startT = (25 - ro.y) / rd.y;
     float t = startT;
 
     if (startT > 1000) return; //Put a cap on max cloud distance.
 
-    float amount = 0.0;
     float3 p = float3(0);
 
     //Unrolling the loop seemed to bring extra performance, (possible placebo.)
@@ -104,10 +107,9 @@ void RayMarch(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
         //If our distance is small, we've hit something
         if (d < 0.001)
         {
-            amount += pushConstants.data3.x;
             // Basic diffuse lighting.
-            float4 col = float4(0.75);
-            col += mul(getNormal(p), lDirection);
+            float4 col = float4(0.8);
+            col += max(dot(getNormal(p), lDirection), 0.0f);
             image[texelCoord] = col;
             break;
         }
