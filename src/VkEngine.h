@@ -230,6 +230,7 @@ private:
 	void InitializeBackgroundPipelines();
 	void InitializeMeshPipeline();
 	void InitializeDefaultImages();
+	void Initialize3DNoise(std::string root);
 	void InitializeDefaultData();
 	void InitializeImgui();
 	void ResizeSwapchain();

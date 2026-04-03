@@ -964,7 +964,7 @@ void VulkanEngine::InitializeBackgroundPipelines()
     //Default params
     advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
     advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
-    advSky.data.data3 = glm::vec4(5, 0.01, 0, 0);
+    advSky.data.data3 = glm::vec4(5, 0.002, 0, 0);
 
     VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
 
@@ -1178,32 +1178,7 @@ void VulkanEngine::InitializeDefaultImages()
 
     _errorImage = CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
-    const std::string root("../assets/environment/clouds/perlin_3D.png");
-    int32_t w, h, channels;
-    unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
-    
-    const int CLOUD_TEX_SIZE = 256;
-    const int TEX_SIZE = 4096;
-    const int SLICE = TEX_SIZE / CLOUD_TEX_SIZE;
-
-    std::vector<uint8_t> d(CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * 4);
-
-    for (int z = 0; z < CLOUD_TEX_SIZE; ++z)
-    {
-        int gridX = (z % SLICE) * CLOUD_TEX_SIZE;
-        int gridY = (z / SLICE) * CLOUD_TEX_SIZE;
-
-        for (int y = 0; y < CLOUD_TEX_SIZE; ++y)
-        {
-            uint8_t* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
-
-            uint8_t* dst = d.data() + (z * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE + y * CLOUD_TEX_SIZE) * 4;
-
-            memcpy(dst, src, CLOUD_TEX_SIZE * 4);
-        }
-    }
-
-	_noiseImage = CreateImage(d.data(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    Initialize3DNoise("../assets/environment/clouds/perlin_3D.png");
 
     VkSamplerCreateInfo sampl{ .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 
@@ -1235,6 +1210,36 @@ void VulkanEngine::InitializeDefaultImages()
         DestroyImage(_errorImage);
 		DestroyImage(_noiseImage);
     });
+}
+
+//TODO: Move this into it's own class + function.
+void VulkanEngine::Initialize3DNoise(std::string root)
+{
+    int32_t w, h, channels;
+    unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
+    
+    const int CLOUD_TEX_SIZE = 256;
+    const int TEX_SIZE = 4096;
+    const int SLICE = TEX_SIZE / CLOUD_TEX_SIZE;
+
+    std::vector<uint8_t> d(CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * 4);
+
+    for (int z = 0; z < CLOUD_TEX_SIZE; ++z)
+    {
+        int gridX = (z % SLICE) * CLOUD_TEX_SIZE;
+        int gridY = (z / SLICE) * CLOUD_TEX_SIZE;
+
+        for (int y = 0; y < CLOUD_TEX_SIZE; ++y)
+        {
+            uint8_t* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
+
+            uint8_t* dst = d.data() + (z * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE + y * CLOUD_TEX_SIZE) * 4;
+
+            memcpy(dst, src, CLOUD_TEX_SIZE * 4);
+        }
+    }
+
+	_noiseImage = CreateImage(d.data(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 }
 
 void VulkanEngine::InitializeDefaultData()
