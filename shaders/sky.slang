@@ -56,7 +56,8 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
 
     // Sun
 
-    RayMarch_Transmissive(ro, rd, lDirection, texelCoord);
+    float offset = cloudTex.SampleLevelZero(float3(texelCoord / 1024, 0.0)).r;
+    RayMarch_Transmissive(ro, rd, offset, lDirection, texelCoord);
 
     float sunDot = clamp(dot(rd, lDirection), 0.0, 1.0);
 
@@ -75,6 +76,7 @@ float noise(float3 uv)
     float3 u = uv;
     u.x += pushConstants.data4.z % 256;
     u.z -= pushConstants.data4.z % 256;
+    u.y -= pushConstants.data4.z % 256;
     return cloudTex.SampleLevelZero(u).x * cloudTex.SampleLevelZero(u * 0.1).x;
 }
 
@@ -123,7 +125,7 @@ void RayMarch(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
     }
 }
 
-void RayMarch_Transmissive(float3 ro, float3 rd, float3 lDirection, int2 texelCoord)
+void RayMarch_Transmissive(float3 ro, float3 rd, float offset, float3 lDirection, int2 texelCoord)
 {
     // If our ray is below the horizon, skip it.
     if (rd.y <= 0)
