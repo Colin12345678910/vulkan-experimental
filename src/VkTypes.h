@@ -24,6 +24,7 @@
 #include <glm/vec4.hpp>
 
 #include "CVars.h" //Put in pch?
+#include <glm/ext/vector_int4.hpp>
 
 #define VK_CHECK(x)                                                     \
     do {                                                                \
@@ -107,7 +108,8 @@ struct ComputePushConstants
     glm::vec4 data2;
     glm::vec4 data3;
     glm::vec4 data4;
-	glm::vec4 cameraForward;
+	glm::vec4 cameraPos;
+    glm::ivec4 screenDimensions;
 	glm::mat4 viewProj;
     glm::mat4 invProj;
 };

@@ -53,7 +53,6 @@ bool HDRI::LoadHDRI(const char* filepath, VulkanEngine* engine)
 		GenerateBRDFLUT(engine);
 		WriteBinToDisk(brdfLUT, HDRI_BRDFLUT_FILE.c_str());
 	}
-	// I'm stuck here mostly bc I never expected to need cubemaps cached to disk, and didn't implement it, definitely kicking myself now. But this gives me the excuse to actually rewrite how textures are handled so, yeah.
 
 	engine->_mainDeletionQueue.Push([=]() {
 		engine->DestroyImage(irradiance);

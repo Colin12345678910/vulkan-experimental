@@ -403,15 +403,17 @@ void VulkanEngine::drawBackground(VkCommandBuffer cmd)
     effect.data.viewProj = glm::inverse(_sceneData.view);//glm::inverse(_camera.getRotation());
 	effect.data.invProj = glm::inverse(_sceneData.proj);
 
-    effect.data.cameraForward = _camera.getPosition();
+    effect.data.cameraPos = _camera.getPosition();
     effect.data.data4 = _sceneData.time;
+    effect.data.screenDimensions = glm::ivec4(_drawExtent.width, _drawExtent.height, 0, 0);
+
     //Bind the gradientPipeline
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
 
     //Bind the descriptorSet
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _gradientPipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _computePipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
 
-    vkCmdPushConstants(cmd, _gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
+    vkCmdPushConstants(cmd, _computePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 
     //Exec w workgroups of 16
     vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
@@ -918,16 +920,16 @@ void VulkanEngine::InitializeBackgroundPipelines()
     computeLayout.pPushConstantRanges = &pushConstants;
     computeLayout.pushConstantRangeCount = 1;
 
-    VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_computePipelineLayout));
 
     //Create Shaader
-    VkShaderModule computeShader;
     VkShaderModule skyShader;
-    if (!vkutil::LoadShaderModule("../shaders/gradient_color.comp.spv", _device, &computeShader))
+    VkShaderModule advSkyShader;
+    if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
     {
         fmt::println("Error when building a compute shader");
     }
-    if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
+    if (!vkutil::LoadShaderModule("../shaders/sky.slang.spv", _device, &advSkyShader))
     {
         fmt::println("Error when building a compute shader");
     }
@@ -935,46 +937,47 @@ void VulkanEngine::InitializeBackgroundPipelines()
     VkPipelineShaderStageCreateInfo stageInfo{ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr };
     stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     stageInfo.pNext = nullptr;
-    stageInfo.module = computeShader;
+    stageInfo.module = skyShader;
     stageInfo.pName = "main";
 
     VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
-    computePipelineCreateInfo.layout = _gradientPipelineLayout;
+    computePipelineCreateInfo.layout = _computePipelineLayout;
     computePipelineCreateInfo.stage = stageInfo;
 
-    ComputeEffect gradient;
-    gradient.layout = _gradientPipelineLayout;
-    gradient.name = "gradient";
-    gradient.data = {};
-
-    gradient.data.data1 = glm::vec4(1, 0, 0, 1);
-    gradient.data.data2 = glm::vec4(0, 0, 1, 1);
-
-    VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
-
-    //Change module to create one
-    computePipelineCreateInfo.stage.module = skyShader;
-
     ComputeEffect sky;
-    sky.layout = _gradientPipelineLayout;
+    sky.layout = _computePipelineLayout;
     sky.name = "sky";
     sky.data = {};
 
-    //Default params
     sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
     VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
 
-    backgroundEffects.push_back(sky);
-    backgroundEffects.push_back(gradient);
+    //Change module to create one
+    computePipelineCreateInfo.stage.module = advSkyShader;
 
-    vkDestroyShaderModule(_device, computeShader, nullptr);
+    ComputeEffect advSky;
+    advSky.layout = _computePipelineLayout;
+    advSky.name = "advSky";
+    advSky.data = {};
+
+    //Default params
+    advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
+    advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
+    advSky.data.data3 = glm::vec4(5, 0.002, 0, 0);
+
+    VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
+
+    backgroundEffects.push_back(advSky);
+    backgroundEffects.push_back(sky);
+
     vkDestroyShaderModule(_device, skyShader, nullptr);
+    vkDestroyShaderModule(_device, advSkyShader, nullptr);
     _mainDeletionQueue.Push([=]()
     {
-        vkDestroyPipelineLayout(_device, _gradientPipelineLayout, nullptr);
+        vkDestroyPipelineLayout(_device, _computePipelineLayout, nullptr);
+        vkDestroyPipeline(_device, advSky.pipeline, nullptr);
         vkDestroyPipeline(_device, sky.pipeline, nullptr);
-        vkDestroyPipeline(_device, gradient.pipeline, nullptr);
     });
 }
 
@@ -1175,10 +1178,7 @@ void VulkanEngine::InitializeDefaultImages()
 
     _errorImage = CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
-    const std::string root("../assets/environment/clouds/perlin.png");
-    int32_t w, h, channels;
-    unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
-	_noiseImage = CreateImage(data, VkExtent3D{ (uint32_t)w, (uint32_t)h, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    Initialize3DNoise("../assets/environment/clouds/perlin_3D.png");
 
     VkSamplerCreateInfo sampl{ .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 
@@ -1210,6 +1210,36 @@ void VulkanEngine::InitializeDefaultImages()
         DestroyImage(_errorImage);
 		DestroyImage(_noiseImage);
     });
+}
+
+//TODO: Move this into it's own class + function.
+void VulkanEngine::Initialize3DNoise(std::string root)
+{
+    int32_t w, h, channels;
+    unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
+    
+    const int CLOUD_TEX_SIZE = 256;
+    const int TEX_SIZE = 4096;
+    const int SLICE = TEX_SIZE / CLOUD_TEX_SIZE;
+
+    std::vector<uint8_t> d(CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * 4);
+
+    for (int z = 0; z < CLOUD_TEX_SIZE; ++z)
+    {
+        int gridX = (z % SLICE) * CLOUD_TEX_SIZE;
+        int gridY = (z / SLICE) * CLOUD_TEX_SIZE;
+
+        for (int y = 0; y < CLOUD_TEX_SIZE; ++y)
+        {
+            uint8_t* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
+
+            uint8_t* dst = d.data() + (z * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE + y * CLOUD_TEX_SIZE) * 4;
+
+            memcpy(dst, src, CLOUD_TEX_SIZE * 4);
+        }
+    }
+
+	_noiseImage = CreateImage(d.data(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 }
 
 void VulkanEngine::InitializeDefaultData()
@@ -1639,7 +1669,11 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     AllocatedImage newImg;
     newImg.imageFormat = format;
     newImg.imageExtent = size;
-	newImg.imageFlags = VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT;
+
+    if (size.depth <= 1)
+    {
+        newImg.imageFlags = VK_IMAGE_CREATE_2D_VIEW_COMPATIBLE_BIT_EXT;
+    }
 
     VkImageCreateInfo imgInfo = vkinit::image_create_info(format, usage, size);
     imgInfo.arrayLayers = arrayLayers;
@@ -1666,6 +1700,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
     //Build the imageview
     VkImageViewCreateInfo viewInfo = vkinit::imageview_create_info(format, newImg.image, aspectFlags);
     viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
+    viewInfo.viewType = size.depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
 
     VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &newImg.imageView));
 
@@ -1803,10 +1838,6 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
 
 	//fmt::println("Successfully copied {} bytes to upload staging buffer", dataSize);
 
-    if (fileSize != dataSize)
-    {
-        // We have additional mips to draw from the file.
-    }
     ImmediateSubmit([&](VkCommandBuffer cmd)
     {
         vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); //Transition our image into one that can be written to.
