@@ -54,10 +54,13 @@ target_precompile_headers(vk_core PUBLIC <optional> <vector> <memory> <string> <
 #Simple library include for the execution one.
 target_link_libraries(engine PUBLIC vk_core)
 
-#add_custom_command(TARGET engine POST_BUILD
-#  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
-#  COMMAND_EXPAND_LISTS
-#  )
+#Copy DLLs (Windows)
+if(WIN32)
+	add_custom_command(TARGET engine POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
+		COMMAND_EXPAND_LISTS
+	)
+endif()
 
 ########## Testing
 ## Maybe move to diff proj?
