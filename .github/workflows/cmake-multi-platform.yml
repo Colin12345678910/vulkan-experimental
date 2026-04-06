@@ -55,7 +55,7 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
     - name: Install Vulkan SDK
-      uses: jakoch/install-vulkan-sdk-action@v1.2.7
+      uses: jakoch/install-vulkan-sdk-action@v1.4.0
       with:
         vulkan_version: 1.4.309.0 # Current version used to build against
         install_runtime: true      # Windows only: installs vulkan-1.dll
