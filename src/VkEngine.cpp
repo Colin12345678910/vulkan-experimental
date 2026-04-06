@@ -1229,12 +1229,6 @@ void VulkanEngine::Initialize3DNoise(std::string root)
         size_t gridX = (z % SLICE) * CLOUD_TEX_SIZE;
         size_t gridY = (z / SLICE) * CLOUD_TEX_SIZE;
 
-        if (gridX + CLOUD_TEX_SIZE > TEX_SIZE || gridY + CLOUD_TEX_SIZE > TEX_SIZE)
-        {
-            fmt::println("OOB");
-            throw std::out_of_range("Cloud texture indexing out of bounds");
-        }
-
         for (size_t y = 0; y < CLOUD_TEX_SIZE; y++)
         {
             unsigned char* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
@@ -1244,8 +1238,6 @@ void VulkanEngine::Initialize3DNoise(std::string root)
             std::copy(src, src + CLOUD_TEX_SIZE * 4, dst);
         }
     }
-
-    fmt::println("Wah!");
 
 	_noiseImage = CreateImage(buf.get(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 

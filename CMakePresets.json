@@ -84,8 +84,8 @@
             "name": "Linux-base",
             "hidden": true,
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/lin_out/build/${presetName}",
-            "installDir": "${sourceDir}/lin_out/install/${presetName}",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "installDir": "${sourceDir}/out/install/${presetName}",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",

@@ -3,7 +3,7 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
-project("vulkan_experimental")
+project("vulkan_experimental" VERSION 0.1.0)
 
 
 find_package(Vulkan REQUIRED)
@@ -41,13 +41,14 @@ add_custom_target(
     )
     
 if (MSVC)
-    target_compile_options(engine PRIVATE /Zi /Oy-)
-    target_link_options(engine PRIVATE /DEBUG)
-      target_compile_options(vk_core PRIVATE /Zi /Oy-)
-    target_link_options(vk_core PRIVATE /DEBUG)
-endif()
+  add_compile_options(/MP)
+endif()    
 
 # Handle "Install"
+
+string(TIMESTAMP CURRENT_DATE "%Y.%m.%d")
+set(CPACK_PACKAGE_VERSION ${CURRENT_DATE})
+
 message(STATUS "BIN DIR: ${CMAKE_SOURCE_DIR}/bin/")
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 #install(TARGETS engine RUNTIME DESTINATION bin)
