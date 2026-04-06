@@ -1,12 +1,12 @@
 # This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
 # See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
 name: CMake on multiple platforms
-
 on:
   push:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -53,6 +53,13 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+
+    - name: Install Vulkan SDK
+      uses: jakoch/install-vulkan-sdk-action@v1.2.7
+      with:
+        vulkan_version: 1.4.309.0 # Current version used to build against
+        install_runtime: true      # Windows only: installs vulkan-1.dll
+        cache: true               # Caches the SDK to speed up future runs
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
