@@ -398,6 +398,8 @@ AllocatedImage HDRI::CreateImageFromDisk(const char* filepath, VulkanEngine* eng
 		return img;
 	}
 
+	return {};
+
 	//engine->ImmediateSubmit([=](VkCommandBuffer cmd) {
 	//	vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	//});

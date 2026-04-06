@@ -1218,28 +1218,40 @@ void VulkanEngine::Initialize3DNoise(std::string root)
     int32_t w, h, channels;
     unsigned char* data = stbi_load(root.c_str(), &w, &h, &channels, 4);
     
-    const int CLOUD_TEX_SIZE = 256;
-    const int TEX_SIZE = 4096;
-    const int SLICE = TEX_SIZE / CLOUD_TEX_SIZE;
+    const uint32_t CLOUD_TEX_SIZE = 256;
+    uint32_t TEX_SIZE = 4096;
+    uint32_t SLICE = TEX_SIZE / CLOUD_TEX_SIZE;
 
-    std::vector<uint8_t> d(CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * 4);
+    auto buf = std::make_unique<unsigned char[]>((CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE * 4));
 
-    for (int z = 0; z < CLOUD_TEX_SIZE; ++z)
+    for (size_t z = 0; z < CLOUD_TEX_SIZE; z++)
     {
-        int gridX = (z % SLICE) * CLOUD_TEX_SIZE;
-        int gridY = (z / SLICE) * CLOUD_TEX_SIZE;
+        size_t gridX = (z % SLICE) * CLOUD_TEX_SIZE;
+        size_t gridY = (z / SLICE) * CLOUD_TEX_SIZE;
 
-        for (int y = 0; y < CLOUD_TEX_SIZE; ++y)
+        if (gridX + CLOUD_TEX_SIZE > TEX_SIZE || gridY + CLOUD_TEX_SIZE > TEX_SIZE)
         {
-            uint8_t* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
+            fmt::println("OOB");
+            throw std::out_of_range("Cloud texture indexing out of bounds");
+        }
 
-            uint8_t* dst = d.data() + (z * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE + y * CLOUD_TEX_SIZE) * 4;
+        for (size_t y = 0; y < CLOUD_TEX_SIZE; y++)
+        {
+            unsigned char* src = data + ((gridY + y) * TEX_SIZE + gridX) * 4;
 
-            memcpy(dst, src, CLOUD_TEX_SIZE * 4);
+            unsigned char* dst = buf.get() + (z * CLOUD_TEX_SIZE * CLOUD_TEX_SIZE + y * CLOUD_TEX_SIZE) * 4;
+
+            std::copy(src, src + CLOUD_TEX_SIZE * 4, dst);
         }
     }
 
-	_noiseImage = CreateImage(d.data(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    fmt::println("Wah!");
+
+	_noiseImage = CreateImage(buf.get(), VkExtent3D{ CLOUD_TEX_SIZE, CLOUD_TEX_SIZE, CLOUD_TEX_SIZE }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    stbi_image_free(data);
+
+    vkDeviceWaitIdle(_device);
 }
 
 void VulkanEngine::InitializeDefaultData()
@@ -1666,7 +1678,7 @@ void VulkanEngine::FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDesc
 
 AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, int mipLevels, std::string name, int arrayLayers)
 {
-    AllocatedImage newImg;
+    AllocatedImage newImg{};
     newImg.imageFormat = format;
     newImg.imageExtent = size;
 
@@ -1717,7 +1729,9 @@ AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat f
 
     AllocatedImage newImg = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipLevels, name, arrayLayers);
 
-	CopyDataToImage(data, newImg);
+    //fmt::println("Size {} {} {}, miplevels {}, name {}", size.width, size.height, size.depth, mipLevels, name );
+
+	CopyDataToImage(data, newImg, 0, 0, 0);
 	
     ImmediateSubmit([&](VkCommandBuffer cmd)
     {
@@ -1798,7 +1812,7 @@ AllocatedImage VulkanEngine::CreateCubeImage(VkExtent3D size, VkFormat format, V
     return newImg;
 }
 
-AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
+AllocatedImage VulkanEngine::CreateCubeImage(const std::vector<std::vector<char>>& data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name)
 {
 	AllocatedImage newImg = CreateCubeImage(size, format, usage, mipmapped, name);
 
@@ -1811,9 +1825,7 @@ AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data
             CopyDataToImage(data[mip].data(), newImg, mip, i, data[mip].size());
         }
     }
-#if DEBUG
 	fmt::println("Transitioning cube map to shader read only...");
-#endif
 
     ImmediateSubmit([=](VkCommandBuffer cmd) {
         vkutil::TransitionImage(cmd, newImg.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -1821,7 +1833,7 @@ AllocatedImage VulkanEngine::CreateCubeImage(std::vector<std::vector<char>> data
     return newImg;
 }
 
-AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int mip, int face, uint32_t fileSize)
+AllocatedImage VulkanEngine::CopyDataToImage(const void* data, AllocatedImage img, int mip, int face, uint32_t fileSize)
 {
     VkExtent3D size =
     {
@@ -1834,11 +1846,14 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
     if (fileSize == 0) { fileSize = dataSize; }
     
     AllocatedBuffer uploadBuff = CreateBuffer(fileSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, "VulkanEngine::CopyDataToImage::UploadBuf");
+
+    assert(uploadBuff.info.pMappedData != nullptr);
+
     memcpy(uploadBuff.info.pMappedData, data, fileSize);
 
 	//fmt::println("Successfully copied {} bytes to upload staging buffer", dataSize);
 
-    ImmediateSubmit([&](VkCommandBuffer cmd)
+    ImmediateSubmit([=](VkCommandBuffer cmd)
     {
         vkutil::TransitionImage(cmd, img.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL); //Transition our image into one that can be written to.
 
@@ -1864,7 +1879,7 @@ AllocatedImage VulkanEngine::CopyDataToImage(void* data, AllocatedImage img, int
     });
 
 	//fmt::println("Successfully copied buffer to image");
-
+    
     DestroyBuffer(uploadBuff);
 
     return img;

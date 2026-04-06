@@ -206,8 +206,8 @@ public:
 	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateImage", int arrayLayers = 1);
 	AllocatedImage CreateMippedImage(std::vector<std::vector<uint8_t>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, std::string name = "VulkanEngine::CreateMippedImage");
 	AllocatedImage CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateCubeImage");
-	AllocatedImage CreateCubeImage(std::vector<std::vector<char>> data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
-	AllocatedImage CopyDataToImage(void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
+	AllocatedImage CreateCubeImage(const std::vector<std::vector<char>>& data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
+	AllocatedImage CopyDataToImage(const void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, std::string name = "VulkanEngine::Internal::Staging");
 	void DestroyBuffer(const AllocatedBuffer& buffer);

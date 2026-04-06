@@ -13,9 +13,7 @@ int unknownImg = 0;
 
 void LoadedGLTF::ClearAll()
 {
-#if DEBUG
 	fmt::println("Clearing GLTF data...");
-#endif
 	VkDevice device = engine->_device;
 	
 	descriptorPool.DestroyPool(device); //Destroy the descriptor pool
@@ -281,10 +279,7 @@ std::optional<AllocatedImage> loadImage(VulkanEngine* engine, fastgltf::Asset& a
 
 std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::filesystem::path filepath)
 {
-#if NDEBUG
-#else
 	fmt::println("Loading GLTF: {}", filepath.string());
-#endif
 
 	std::shared_ptr<LoadedGLTF> loadedScene = std::make_shared<LoadedGLTF>();
 
@@ -428,9 +423,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		else if (mat.alphaMode == fastgltf::AlphaMode::Mask)
 		{
 			passType = MaterialPass::Other;
-#if DEBUG
 			fmt::println("Alpha mode mask not supported yet, using main transparent pass for now.");
-#endif
 		}
 
 		// Setting up default resources
@@ -726,11 +719,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 			node->RefreshTransform(glm::mat4(1.f));
 		}
 	}
-
-	//Debug
-#if DEBUG
 	fmt::println("Loaded images: fPath: {}, Vector: {}, BufferView: {}", fPath, Vector, BView);
 	fmt::println("Loaded: Materials: {}, Meshes: {}, Samplers: {}", Materials, Meshes, Samplers);
-#endif
 	return loadedScene;
 }
