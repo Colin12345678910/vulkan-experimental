@@ -47,10 +47,20 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
+    - name: Generate Timestamp (Linux)
+      if: runner.os != 'Windows'
+      run: echo "ts=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+
+    - name: Generate Timestamp (Win)
+      if: runner.os == 'Windows'
+      run: |
+        $ts = Get-Date -Format "yyyyMMdd-HHmm"
+        Add-Content -Path $env:GITHUB_ENV -Value "ts=$ts"
+
     - name: Print build dir
       run: |
         echo "Build dir:  ${{ steps.strings.outputs.build-output-dir }}"
-        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{github.event.repository.updated_at}}.zip"
+        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{ env.ts }}.zip"
 
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1.4.0
@@ -76,10 +86,10 @@ jobs:
     - name: CPack
       run: |
         cd ${{ steps.strings.outputs.build-output-dir }}
-        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{github.event.repository.updated_at}}"
+        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ env.ts }}"
 
     - name: Upload
-      run: gh release create ${{github.event.repository.updated_at}} VulkanExperimental-${{matrix.os}}-${{github.event.repository.updated_at}}.zip --title "VulkanExperimental"
+      run: gh release create ${{ env.ts }} VulkanExperimental-${{matrix.os}}-${{ env.ts }}.zip --title "VulkanExperimental"
       env: 
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
