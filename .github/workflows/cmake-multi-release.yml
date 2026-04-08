@@ -10,13 +10,13 @@ jobs:
     steps:
     - name: Generate Timestamp (Linux)
       if: runner.os != 'Windows'
-      run: echo "ts=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+      run: echo "ts=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
 
     - name: Generate Timestamp (Win)
       if: runner.os == 'Windows'
       run: |
         $ts = Get-Date -Format "yyyyMMdd-HHmm"
-        Add-Content -Path $env:GITHUB_ENV -Value "ts=$ts"
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "ts=$ts"
 
     - uses: actions/checkout@v3
     - name: Create a Release
@@ -24,10 +24,11 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        title: VulkanExperimental ${{env.ts}}
-        tag: ${{env.ts}}
+        title: VulkanExperimental ${{needs.create_release.outputs.ts}}
+        tag: ${{needs.create_release.outputs.ts}}
         
   build:
+    needs: create_release
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -70,7 +71,7 @@ jobs:
     - name: Print build dir
       run: |
         echo "Build dir:  ${{ steps.strings.outputs.build-output-dir }}"
-        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{ env.ts }}.zip"
+        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}.zip"
 
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1.4.0
@@ -96,10 +97,10 @@ jobs:
     - name: CPack
       run: |
         cd ${{ steps.strings.outputs.build-output-dir }}
-        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ env.ts }}"
+        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}"
 
     - name: Upload
-      run: gh release upload ${{ env.ts }} ${{ steps.strings.outputs.build-output-dir }}/VulkanExperimental-${{matrix.os}}-${{ env.ts }}-runtime.zip --clobber
+      run: gh release upload ${{ needs.create_release.outputs.ts }} ${{ steps.strings.outputs.build-output-dir }}/VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}-runtime.zip --clobber
       env: 
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
