@@ -4,10 +4,12 @@ name: Release Binary
 on:
   pull_request:
     branches: [ "master" ]
+    types: [closed]
   workflow_dispatch:
 
 jobs:
   build:
+    if: github.event.pull_request.merged == true
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -89,7 +91,7 @@ jobs:
         cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ env.ts }}"
 
     - name: Upload
-      run: gh release create ${{ env.ts }} VulkanExperimental-${{matrix.os}}-${{ env.ts }}.zip --title "VulkanExperimental"
+      run: gh release create ${{ env.ts }} VulkanExperimental-${{matrix.os}}-${{ env.ts }}-runtime.zip --title "VulkanExperimental"
       env: 
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
