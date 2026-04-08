@@ -7,16 +7,18 @@ on:
 jobs:
   create_release:
     runs-on: ubuntu-latest
+    outputs:
+      ts: ${{env.ts}}
     steps:
     - name: Generate Timestamp (Linux)
       if: runner.os != 'Windows'
-      run: echo "ts=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+      run: echo "ts=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
 
     - name: Generate Timestamp (Win)
       if: runner.os == 'Windows'
       run: |
         $ts = Get-Date -Format "yyyyMMdd-HHmm"
-        Add-Content -Path $env:GITHUB_OUTPUT -Value "ts=$ts"
+        Add-Content -Path $env:GITHUB_ENV -Value "ts=$ts"
 
     - uses: actions/checkout@v3
     - name: Create a Release
@@ -24,8 +26,8 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        title: VulkanExperimental ${{needs.create_release.outputs.ts}}
-        tag: ${{needs.create_release.outputs.ts}}
+        title: VulkanExperimental ${{env.ts}}
+        tag: ${{env.ts}}
         
   build:
     needs: create_release
@@ -60,7 +62,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
       id: strings
