@@ -2,14 +2,10 @@
 # See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
 name: Release Binary
 on:
-  pull_request:
-    branches: [ "master" ]
-    types: [closed]
   workflow_dispatch:
 
 jobs:
   build:
-    if: github.event.pull_request.merged == true
     runs-on: ${{ matrix.os }}
 
     strategy:
