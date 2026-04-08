@@ -50,7 +50,7 @@ jobs:
     - name: Print build dir
       run: |
         echo "Build dir:  ${{ steps.strings.outputs.build-output-dir }}"
-        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{github.head_ref.repository.updated_at}}.zip"
+        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{github.event.repository.updated_at}}.zip"
 
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1.4.0
@@ -79,7 +79,7 @@ jobs:
         cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{github.event.repository.updated_at}}"
 
     - name: Upload
-      run: gh release create ${{github.event.repository.updated_at}} VulkanExperimental-${{matrix.os}}-${{github.head_ref.repository.updated_at}}.zip --title "VulkanExperimental"
+      run: gh release create ${{github.event.repository.updated_at}} VulkanExperimental-${{matrix.os}}-${{github.event.repository.updated_at}}.zip --title "VulkanExperimental"
       env: 
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
