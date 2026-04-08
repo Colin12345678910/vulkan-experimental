@@ -7,6 +7,8 @@ on:
 jobs:
   create_release:
     runs-on: ubuntu-latest
+    outputs:
+      ts: ${{env.ts}}
     steps:
     - name: Generate Timestamp (Linux)
       if: runner.os != 'Windows'
@@ -18,11 +20,17 @@ jobs:
         $ts = Get-Date -Format "yyyyMMdd-HHmm"
         Add-Content -Path $env:GITHUB_ENV -Value "ts=$ts"
 
-    - name: gh release
-      run: gh release create ${{ env.ts }} --title "VulkanExperimental"
-      env: 
-        GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+    - uses: actions/checkout@v3
+    - name: Create a Release
+      uses: elgohr/Github-Release-Action@v5
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        title: VulkanExperimental ${{env.ts}}
+        tag: ${{env.ts}}
+        
   build:
+    needs: create_release
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -54,7 +62,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
       id: strings
@@ -65,7 +73,7 @@ jobs:
     - name: Print build dir
       run: |
         echo "Build dir:  ${{ steps.strings.outputs.build-output-dir }}"
-        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{ env.ts }}.zip"
+        echo "Final zip: VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}.zip"
 
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1.4.0
@@ -91,10 +99,10 @@ jobs:
     - name: CPack
       run: |
         cd ${{ steps.strings.outputs.build-output-dir }}
-        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ env.ts }}"
+        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}"
 
     - name: Upload
-      run: gh release upload ${{ env.ts }} ${{ steps.strings.outputs.build-output-dir }}/VulkanExperimental-${{matrix.os}}-${{ env.ts }}-runtime.zip --clobber
+      run: gh release upload ${{ needs.create_release.outputs.ts }} ${{ steps.strings.outputs.build-output-dir }}/VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}-runtime.zip --clobber
       env: 
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
