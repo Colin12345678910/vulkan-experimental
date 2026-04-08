@@ -99,7 +99,7 @@ jobs:
     - name: CPack
       run: |
         cd ${{ steps.strings.outputs.build-output-dir }}
-        cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}"
+        cpack -C ${{ matrix.build_type }} -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}"
 
     - name: Upload
       run: gh release upload ${{ needs.create_release.outputs.ts }} ${{ steps.strings.outputs.build-output-dir }}/VulkanExperimental-${{matrix.os}}-${{ needs.create_release.outputs.ts }}-runtime.zip --clobber
