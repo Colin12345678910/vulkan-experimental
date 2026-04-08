@@ -87,7 +87,7 @@ jobs:
         cpack -G ZIP -D CPACK_PACKAGE_FILE_NAME="VulkanExperimental-${{matrix.os}}-${{ env.ts }}"
 
     - name: Upload
-      run: gh release create ${{ env.ts }} VulkanExperimental-${{matrix.os}}-${{ env.ts }}-runtime.zip --title "VulkanExperimental"
+      run: gh release create ${{ env.ts }} ${{ steps.strings.outputs.build-output-dir }}/VulkanExperimental-${{matrix.os}}-${{ env.ts }}-runtime.zip --title "VulkanExperimental"
       env: 
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
