@@ -35,6 +35,8 @@ add_library(vk_core STATIC
   IRenderpass.h
   HDRI.cpp
   HDRI.h
+  RenderPipeline.cpp
+  RenderPipeline.h
   TBin.h
 )
 

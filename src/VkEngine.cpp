@@ -131,6 +131,9 @@ void VulkanEngine::init(ExitInstructions instructions)
 
     InitializeDescriptors();
 
+    _rendergraph.Create();
+    _mainDeletionQueue.Push([&]() { _rendergraph.Destroy(); });
+
     InitializePipelines();
 
     InitializeImgui();
@@ -269,7 +272,7 @@ void VulkanEngine::draw()
     //Convert our main drawImage into a layout for writing, and clearing it.
     vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-    drawBackground(cmd);
+    _rendergraph.Draw(cmd);
 
     //Transition to colorAtt optimal bc geometry cannot draw on General.
     vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -389,34 +392,6 @@ void VulkanEngine::draw()
     }
     //Increment to the next frame;
     _frameNumber++;
-}
-
-void VulkanEngine::drawBackground(VkCommandBuffer cmd)
-{
-    VkClearColorValue clear;
-    float flash = std::abs(std::sin(_frameNumber / 480.f));
-    clear = { { 0.0f, 0.0f, flash, 1.0f } };
-
-    VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-    
-    ComputeEffect& effect = backgroundEffects[currentBackground];
-    effect.data.viewProj = glm::inverse(_sceneData.view);//glm::inverse(_camera.getRotation());
-	effect.data.invProj = glm::inverse(_sceneData.proj);
-
-    effect.data.cameraPos = _camera.getPosition();
-    effect.data.data4 = _sceneData.time;
-    effect.data.screenDimensions = glm::ivec4(_drawExtent.width, _drawExtent.height, 0, 0);
-
-    //Bind the gradientPipeline
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-
-    //Bind the descriptorSet
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _computePipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
-
-    vkCmdPushConstants(cmd, _computePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
-
-    //Exec w workgroups of 16
-    vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
 }
 
 void VulkanEngine::run()
@@ -907,78 +882,78 @@ void VulkanEngine::InitializePipelines()
 
 void VulkanEngine::InitializeBackgroundPipelines()
 {
-    VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
-    //Define the descriptor used for this pipeline.
-    computeLayout.setLayoutCount = 1;
-    computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
+    //VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
+    ////Define the descriptor used for this pipeline.
+    //computeLayout.setLayoutCount = 1;
+    //computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
 
-    VkPushConstantRange pushConstants{};
-    pushConstants.offset = 0;
-    pushConstants.size = sizeof(ComputePushConstants);
-    pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    //VkPushConstantRange pushConstants{};
+    //pushConstants.offset = 0;
+    //pushConstants.size = sizeof(ComputePushConstants);
+    //pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    computeLayout.pPushConstantRanges = &pushConstants;
-    computeLayout.pushConstantRangeCount = 1;
+    //computeLayout.pPushConstantRanges = &pushConstants;
+    //computeLayout.pushConstantRangeCount = 1;
 
-    VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_computePipelineLayout));
+    //VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_computePipelineLayout));
 
-    //Create Shaader
-    VkShaderModule skyShader;
-    VkShaderModule advSkyShader;
-    if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
-    {
-        fmt::println("Error when building a compute shader");
-    }
-    if (!vkutil::LoadShaderModule("../shaders/sky.slang.spv", _device, &advSkyShader))
-    {
-        fmt::println("Error when building a compute shader");
-    }
+    ////Create Shaader
+    //VkShaderModule skyShader;
+    //VkShaderModule advSkyShader;
+    //if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
+    //{
+    //    fmt::println("Error when building a compute shader");
+    //}
+    //if (!vkutil::LoadShaderModule("../shaders/sky.slang.spv", _device, &advSkyShader))
+    //{
+    //    fmt::println("Error when building a compute shader");
+    //}
 
-    VkPipelineShaderStageCreateInfo stageInfo{ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr };
-    stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    stageInfo.pNext = nullptr;
-    stageInfo.module = skyShader;
-    stageInfo.pName = "main";
+    //VkPipelineShaderStageCreateInfo stageInfo{ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr };
+    //stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    //stageInfo.pNext = nullptr;
+    //stageInfo.module = skyShader;
+    //stageInfo.pName = "main";
 
-    VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
-    computePipelineCreateInfo.layout = _computePipelineLayout;
-    computePipelineCreateInfo.stage = stageInfo;
+    //VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
+    //computePipelineCreateInfo.layout = _computePipelineLayout;
+    //computePipelineCreateInfo.stage = stageInfo;
 
-    ComputeEffect sky;
-    sky.layout = _computePipelineLayout;
-    sky.name = "sky";
-    sky.data = {};
+    //ComputeEffect sky;
+    //sky.layout = _computePipelineLayout;
+    //sky.name = "sky";
+    //sky.data = {};
 
-    sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+    //sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
-    VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
+    //VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
 
-    //Change module to create one
-    computePipelineCreateInfo.stage.module = advSkyShader;
+    ////Change module to create one
+    //computePipelineCreateInfo.stage.module = advSkyShader;
 
-    ComputeEffect advSky;
-    advSky.layout = _computePipelineLayout;
-    advSky.name = "advSky";
-    advSky.data = {};
+    //ComputeEffect advSky;
+    //advSky.layout = _computePipelineLayout;
+    //advSky.name = "advSky";
+    //advSky.data = {};
 
-    //Default params
-    advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
-    advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
-    advSky.data.data3 = glm::vec4(5, 0.002, 0, 0);
+    ////Default params
+    //advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
+    //advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
+    //advSky.data.data3 = glm::vec4(5, 0.002, 0, 0);
 
-    VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
+    //VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
 
-    backgroundEffects.push_back(advSky);
-    backgroundEffects.push_back(sky);
+    //backgroundEffects.push_back(advSky);
+    //backgroundEffects.push_back(sky);
 
-    vkDestroyShaderModule(_device, skyShader, nullptr);
-    vkDestroyShaderModule(_device, advSkyShader, nullptr);
-    _mainDeletionQueue.Push([=]()
-    {
-        vkDestroyPipelineLayout(_device, _computePipelineLayout, nullptr);
-        vkDestroyPipeline(_device, advSky.pipeline, nullptr);
-        vkDestroyPipeline(_device, sky.pipeline, nullptr);
-    });
+    //vkDestroyShaderModule(_device, skyShader, nullptr);
+    //vkDestroyShaderModule(_device, advSkyShader, nullptr);
+    //_mainDeletionQueue.Push([=]()
+    //{
+    //    vkDestroyPipelineLayout(_device, _computePipelineLayout, nullptr);
+    //    vkDestroyPipeline(_device, advSky.pipeline, nullptr);
+    //    vkDestroyPipeline(_device, sky.pipeline, nullptr);
+    //});
 }
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function)

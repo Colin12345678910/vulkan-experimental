@@ -20,7 +20,7 @@
 #include <unordered_set>
 #include "VkImages.h"
 #include "VkPipelines.h"
-
+#include "RenderPipeline.h"
 #include <GLTFMetalicRoughness.h>
 
 #include "Camera.h"
@@ -134,8 +134,7 @@ public:
 	DrawContext mainDrawCtx;
 	std::unordered_map < std::string, std::shared_ptr<RenderNode>> loadedNodes;
 	
-	//VkPipeline _gradientPipeline;
-	VkPipelineLayout _computePipelineLayout;
+	
 
 	//Here's our basic ShaderLayouts
 	VkPipelineLayout _meshPipelineLayout;
@@ -169,6 +168,7 @@ public:
 
 	GLTFMetallicRoughness metalRoughMaterial;
 	MaterialInstance defaultMaterial;
+	GPUSceneData _sceneData;
 
 	EngineStats stats;
 
@@ -190,8 +190,6 @@ public:
 	void draw();
 
 	std::vector<std::function<void()>> _drawList;
-
-	void drawBackground(VkCommandBuffer cmd);
 
 	double DeltaTime() { return stats.frameTime; }
 
@@ -239,7 +237,6 @@ private:
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void UpdateScene();
 
-	GPUSceneData _sceneData;
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
 	//Images
@@ -250,6 +247,8 @@ private:
 
 	AllocatedImage _noiseImage;
 	AllocatedBuffer screenshotBuffer;
+
+	RenderPipeline _rendergraph;
 
 	HDRI hdri;
 
