@@ -213,6 +213,9 @@ public:
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor, VkPipeline pipelineOverride, VkPipelineLayout pipelineLayoutOverride);
 
+	AllocatedBuffer SetupGeometry(VkCommandBuffer cmd);
+	void DrawGeometry(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
+	VkDescriptorSet SetupShadows(VkCommandBuffer cmd);
 	
 	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	//run main loop
@@ -232,8 +235,6 @@ private:
 	void InitializeDefaultData();
 	void InitializeImgui();
 	void ResizeSwapchain();
-	void DrawGeometry(VkCommandBuffer cmd);
-	void DrawShadows(VkCommandBuffer cmd);
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void UpdateScene();
 
@@ -248,7 +249,7 @@ private:
 	AllocatedImage _noiseImage;
 	AllocatedBuffer screenshotBuffer;
 
-	RenderPipeline _rendergraph;
+	RenderPipeline _renderPipeline;
 
 	HDRI hdri;
 
@@ -257,9 +258,6 @@ private:
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
-	std::vector<IGeometryPass*> geometryPasses;
-
-	ShadowMap shadowMap;
 	void CreateSwapchain();
 	void DestroySwapchain();
 	bool IsVisible(const RenderObject& obj, const glm::mat4& viewProj);

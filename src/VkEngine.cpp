@@ -131,12 +131,12 @@ void VulkanEngine::init(ExitInstructions instructions)
 
     InitializeDescriptors();
 
-    _rendergraph.Create();
-    _mainDeletionQueue.Push([&]() { _rendergraph.Destroy(); });
-
     InitializePipelines();
 
     InitializeImgui();
+
+    _renderPipeline.Create();
+    _mainDeletionQueue.Push([&]() { _renderPipeline.Destroy(); });
 
     hdri.LoadHDRI("../assets/hdri/base.hdr", this);
 
@@ -153,10 +153,6 @@ void VulkanEngine::init(ExitInstructions instructions)
 	//assert(structure.has_value(), "Failed to load structure glb file");
 
 	loadedScenes["structure"] = structure.value();
-
-    // Load Shadowmaps
-    shadowMap.Init();
-	geometryPasses.push_back(&shadowMap);
 
     // everything went fine
     _isInitialized = true;
@@ -252,39 +248,15 @@ void VulkanEngine::draw()
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    if (CVAR_DoShadows.Get())
-    {
-        /*
-        * Yea, I don't know how I didn't realize that I could just sneak the 
-        * shadowpass rendering into the main queue, there is literally zero
-        * reason for the CPU to care about the status of the shadowpass anyway.
-        * 
-        * So enjoy this hilariously simplified shadowcasting code.
-        * Extra performance for no cost is always a win
-        */
-
-        //Transition the shadowmap for the next frame.
-        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-        DrawShadows(cmd);
-    }
-
     //Convert our main drawImage into a layout for writing, and clearing it.
     vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-    _rendergraph.Draw(cmd);
-
-    //Transition to colorAtt optimal bc geometry cannot draw on General.
-    vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vkutil::TransitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    
-    if (CVAR_DoShadows.Get())
-        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    DrawGeometry(cmd);
+    _renderPipeline.Draw(cmd);
 
     //Convert the drawimage into a transfer src and the swapchain into a transferDst
-    vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vkutil::TransitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     //copy image from drawImage to swapchain.
@@ -497,16 +469,7 @@ void VulkanEngine::run()
             //ImGui::LabelText("Frame", std::to_string(framerate).c_str());
             ImGui::SliderFloat("Render Scale", &renderScale, 0.1f, 1.0f);
 
-            ComputeEffect& selected = backgroundEffects[currentBackground];
-
-            ImGui::Text("Selected effect: ", selected.name);
-
-            ImGui::SliderInt("Effect Index", &currentBackground, 0, backgroundEffects.size() - 1);
-
-            ImGui::InputFloat4("data1", (float*)&selected.data.data1);
-            ImGui::InputFloat4("data2", (float*)&selected.data.data2);
-            ImGui::InputFloat4("data3", (float*)&selected.data.data3);
-            ImGui::InputFloat4("data4", (float*)&selected.data.data4);
+            _renderPipeline.ImGUI();
         }
         ImGui::End();
 
@@ -520,10 +483,6 @@ void VulkanEngine::run()
 			ImGui::Text("Drawcalls: %i", stats.drawCalls);
             ImGui::Text("Transparents: %i", stats.drawCalls);
         }
-        ImGui::End();
-
-        ImGui::Begin("Camera");
-        shadowMap.TransferMapToR32(VulkanEngine::Get());
         ImGui::End();
 
         if (ImGui::Begin("CVars"))
@@ -1321,14 +1280,14 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     return newSurface;
 }
 
-void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
+AllocatedBuffer VulkanEngine::SetupGeometry(VkCommandBuffer cmd)
 {
     //Reset counters
     stats.triangleCount = 0;
-	stats.drawCalls = 0;
+    stats.drawCalls = 0;
     stats.transparents = 0;
 
-	auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::system_clock::now();
 
     //Begin setting up GPUSceneData
     //Allocate a new uniform buffer
@@ -1337,23 +1296,17 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     GetCurrentFrame()._deletionQueue.Push([=, this]()
     {
         DestroyBuffer(gpuSceneDataBuf);
-    });
-
+    }); 
+    
     //write the Global GPU buffer
     GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuf.allocation->GetMappedData();
     *sceneUniformData = _sceneData;
 
-    VkDescriptorSet globalDescriptor;
-    VKDescriptors::DescriptorWriter writer;
-    
-    //Create a descriptorSet that binds the global GPU dataBuffer
-    globalDescriptor = globalDescriptiorAllocator.Allocate(_device, _gpuSceneDataDescriptorLayout);
-    
-    writer
-        .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-        .WriteImage(1, shadowMap.depthImage.imageView, _defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-        .UpdateSet(_device, globalDescriptor);
+    return gpuSceneDataBuf;
+}
 
+void VulkanEngine::DrawGeometry(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor)
+{
     //Begin a render pass to our drawImage
     VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo depthAttachmentInfo = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -1385,12 +1338,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     //Clear drawCTX
     mainDrawCtx.OpaqueSurfaces.clear();
     mainDrawCtx.TransparentSurfaces.clear();
-
-	auto end = std::chrono::system_clock::now();
-
-	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
-	stats.meshDrawTime = elapsed.count() / 1000.0f;
 }
 
 //AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 10000.0f);
@@ -1400,7 +1347,7 @@ AutoFloatCVar CVAR_shadow_x("shadow.x", "Position of the Shadowmap in the X plan
 AutoFloatCVar CVAR_shadow_y("shadow.y", "Position of the Shadowmap in the Y plane", -1000.0f);
 AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 100.0f);
 
-void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
+VkDescriptorSet VulkanEngine::SetupShadows(VkCommandBuffer cmd)
 {
     GPUSceneData shadowScene;
     {
@@ -1447,7 +1394,11 @@ void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
     //Create a descriptorSet that binds the global GPU dataBuffer
     globalDescriptor = globalDescriptiorAllocator.Allocate(_device, _gpuSceneDataDescriptorLayout);
 
-    shadowMap.Draw(cmd, globalDescriptor, writer, gpuSceneDataBuf);
+    writer
+        .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+        .UpdateSet(_device, globalDescriptor);
+
+    return globalDescriptor;
 }
 
 void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)

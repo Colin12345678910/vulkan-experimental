@@ -14,5 +14,5 @@ public:
 class IGeometryPass : public IRenderpass
 {
 public:
-	virtual void Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor, VKDescriptors::DescriptorWriter writer, AllocatedBuffer gpuSceneDataBuf) {};
+	virtual void Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor) {};
 };

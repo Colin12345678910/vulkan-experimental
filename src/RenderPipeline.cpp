@@ -6,21 +6,40 @@ void RenderPipeline::Draw(VkCommandBuffer cmd)
 {
 	for (auto& pass : renderPasses)
 	{
-		pass->Draw(cmd);
+        if(pass->isActive)
+		    pass->Draw(cmd, this);
 	}
+}
+
+void RenderPipeline::ImGUI()
+{
+    for (auto& pass : renderPasses)
+    {
+        pass->OnImGUI();
+    }
+    for (int i = 0; i < renderPasses.size(); i++)
+    {
+        ImGui::Checkbox(fmt::format("RenderPass {}", i).c_str(), &renderPasses[i]->isActive);
+    }
 }
 
 void RenderPipeline::Create()
 {
+    auto& engine = VulkanEngine::Get();
+
 	//Define and push renderpasses here
 	std::unique_ptr<RenderPass> backgroundPass = std::make_unique<BackgroundPass>();
+    std::unique_ptr<RenderPass> geometryPass = std::make_unique<GeometryPass>();
+    std::unique_ptr<RenderPass> shadowPass = std::make_unique<ShadowPass>();
 
 	renderPasses.push_back(std::move(backgroundPass));
+    renderPasses.push_back(std::move(shadowPass));
+    renderPasses.push_back(std::move(geometryPass));
 
 	//Create any resources needed explicitly for this pass.
 	for (auto& pass : renderPasses)
 	{
-		pass->OnCreate();
+        pass->OnCreate(this);
 	}
 }
 
@@ -32,7 +51,7 @@ void RenderPipeline::Destroy()
 	}
 }
 
-void BackgroundPass::Draw(VkCommandBuffer cmd)
+void BackgroundPass::Draw(VkCommandBuffer cmd, RenderPipeline* renderPipeline)
 {
 	auto& engine = VulkanEngine::Get();
 
@@ -56,7 +75,7 @@ void BackgroundPass::Draw(VkCommandBuffer cmd)
 	vkCmdDispatch(cmd, std::ceil(engine._drawExtent.width / 16.0), std::ceil(engine._drawExtent.height / 16.0), 1);
 }
 
-void BackgroundPass::OnCreate()
+void BackgroundPass::OnCreate(RenderPipeline* pipeline)
 {
     auto& engine = VulkanEngine::Get();
 
@@ -140,14 +159,98 @@ void BackgroundPass::OnDestroy()
 {
 }
 
-void GeometryPass::Draw(VkCommandBuffer cmd)
+void BackgroundPass::OnImGUI()
 {
+    auto& engine = VulkanEngine::Get();
+
+    ComputeEffect& selected = engine.backgroundEffects[engine.currentBackground];
+
+    ImGui::Text("Selected effect: ", selected.name);
+
+    ImGui::SliderInt("Effect Index", &engine.currentBackground, 0, engine.backgroundEffects.size() - 1);
+
+    ImGui::InputFloat4("data1", (float*)&selected.data.data1);
+    ImGui::InputFloat4("data2", (float*)&selected.data.data2);
+    ImGui::InputFloat4("data3", (float*)&selected.data.data3);
+    ImGui::InputFloat4("data4", (float*)&selected.data.data4);
 }
 
-void GeometryPass::OnCreate()
+void GeometryPass::Draw(VkCommandBuffer cmd, RenderPipeline* pipeline)
+{
+    auto& engine = VulkanEngine::Get();
+
+    auto start = std::chrono::system_clock::now();
+
+    //Transition to colorAtt optimal bc geometry cannot draw on General.
+    vkutil::TransitionImage(cmd, engine._drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+   
+    auto gpuSceneDataBuf = engine.SetupGeometry(cmd);
+
+    VkDescriptorSet globalDescriptor;
+    VKDescriptors::DescriptorWriter writer;
+
+    //Create a descriptorSet that binds the global GPU dataBuffer
+    globalDescriptor = engine.globalDescriptiorAllocator.Allocate(engine._device, engine._gpuSceneDataDescriptorLayout);
+
+    writer
+        .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+        .WriteImage(1, pipeline->images["vk::shadow"].imageView, engine.GetDefaultSampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+        .UpdateSet(engine._device, globalDescriptor);
+
+    engine.DrawGeometry(cmd, globalDescriptor);
+
+    vkutil::TransitionImage(cmd, engine._drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+
+    auto end = std::chrono::system_clock::now();
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    engine.stats.meshDrawTime = elapsed.count() / 1000.0f;
+}
+
+void GeometryPass::OnCreate(RenderPipeline* pipeline)
 {
 }
 
 void GeometryPass::OnDestroy()
 {
+}
+
+void ShadowPass::Draw(VkCommandBuffer cmd, RenderPipeline* pipeline)
+{
+    auto& engine = VulkanEngine::Get();
+    /*
+    * Yea, I don't know how I didn't realize that I could just sneak the
+    * shadowpass rendering into the main queue, there is literally zero
+    * reason for the CPU to care about the status of the shadowpass anyway.
+    *
+    * So enjoy this hilariously simplified shadowcasting code.
+    * Extra performance for no cost is always a win
+    */
+
+    //Transition the shadowmap for the next frame.
+    vkutil::TransitionImage(cmd, pipeline->images["vk::shadow"].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    auto globalDescriptor = engine.SetupShadows(cmd);
+    shadowMap.Draw(cmd, globalDescriptor);
+
+    vkutil::TransitionImage(cmd, pipeline->images["vk::shadow"].image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
+void ShadowPass::OnCreate(RenderPipeline* pipeline)
+{
+    // Load Shadowmaps
+    shadowMap.Init();
+    pipeline->images["vk::shadow"] = shadowMap.depthImage;
+}
+
+void ShadowPass::OnDestroy()
+{
+}
+
+void ShadowPass::OnImGUI()
+{
+    ImGui::Begin("Camera");
+    shadowMap.TransferMapToR32(VulkanEngine::Get());
+    ImGui::End();
 }
