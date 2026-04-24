@@ -46,6 +46,29 @@ public:
 	void OnCreate(RenderPipeline* pipeline) override;
 	void OnDestroy() override;
 };
+class PostPass : public RenderPass
+{
+public:
+	PostPass() {};
+	void Draw(VkCommandBuffer cmd, RenderPipeline* pipeline) override;
+	void OnCreate(RenderPipeline* pipeline) override;
+	void OnDestroy() override;
+
+	void WriteDescriptors(VulkanEngine* engine, RenderPipeline* pipeline);
+
+	struct pushConstant
+	{
+		float pixelOffset;
+		float samplePosMult;
+		float strength;
+		float padding;
+	};
+
+	VkDescriptorSetLayout _postLayout;
+	VkDescriptorSet _postDescriptor;
+	VkPipelineLayout _postPipelineLayout;
+	VkPipeline postPipeline;
+};
 
 class RenderPipeline
 {

@@ -2,6 +2,13 @@
 #include "RenderPipeline.h"
 #include "VkEngine.h"
 
+/*
+* RenderPipeline
+* Apr. 24, 2026
+* This is a whole bunch of abstractions to move most of the rendering logic outside the main engine class.
+* Supporting enabling and disabling renderpasses, and easing the effort needed to define new render passes.
+*/
+
 void RenderPipeline::Draw(VkCommandBuffer cmd)
 {
 	for (auto& pass : renderPasses)
@@ -31,10 +38,12 @@ void RenderPipeline::Create()
 	std::unique_ptr<RenderPass> backgroundPass = std::make_unique<BackgroundPass>();
     std::unique_ptr<RenderPass> geometryPass = std::make_unique<GeometryPass>();
     std::unique_ptr<RenderPass> shadowPass = std::make_unique<ShadowPass>();
+    std::unique_ptr<RenderPass> postPass = std::make_unique<PostPass>();
 
 	renderPasses.push_back(std::move(backgroundPass));
     renderPasses.push_back(std::move(shadowPass));
     renderPasses.push_back(std::move(geometryPass));
+    renderPasses.push_back(std::move(postPass));
 
 	//Create any resources needed explicitly for this pass.
 	for (auto& pass : renderPasses)
@@ -253,4 +262,107 @@ void ShadowPass::OnImGUI()
     ImGui::Begin("Camera");
     shadowMap.TransferMapToR32(VulkanEngine::Get());
     ImGui::End();
+}
+
+AutoFloatCVar CVAR_kawase_strength("kawase.strength", "Position of the Shadowmap in the X plane", 1.0f, 10.0f);
+AutoFloatCVar CVAR_kawase_samplePosMult("kawase.samplePosMult", "Position of the Shadowmap in the Z plane", 1.0f, 10.0f);
+AutoIntCVar CVAR_operations("kawase.operations", "num", 0); //Since we lack a ping-pong buffer, it's set to 0
+
+void PostPass::Draw(VkCommandBuffer cmd, RenderPipeline* renderPipeline)
+{
+    auto& engine = VulkanEngine::Get();
+
+    pushConstant constants{};
+    constants.strength = CVAR_kawase_strength.Get();
+    constants.pixelOffset = 0;
+    constants.samplePosMult = CVAR_kawase_samplePosMult.Get();
+
+    //Bind the gradientPipeline
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, postPipeline);
+
+    //Testing if shader works in general
+    for (int i = 0; i < CVAR_operations.Get(); i++)
+    {
+        constants.pixelOffset = i;
+        //Bind the descriptorSet
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _postPipelineLayout, 0, 1, &engine._drawImageDescriptors, 0, nullptr);
+
+        vkCmdPushConstants(cmd, _postPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstant), &constants);
+
+        //Exec w workgroups of 16
+        vkCmdDispatch(cmd, std::ceil(engine._drawExtent.width / 16.0), std::ceil(engine._drawExtent.height / 16.0), 1);
+    }
+}
+
+void PostPass::OnCreate(RenderPipeline* pipeline)
+{
+    auto& engine = VulkanEngine::Get();
+    auto device = engine._device;
+
+    //WriteDescriptors(&engine, pipeline);
+
+    VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
+    //Define the descriptor used for this pipeline.
+    computeLayout.setLayoutCount = 1;
+    computeLayout.pSetLayouts = &engine._drawImageDescriptorLayout;
+
+    VkPushConstantRange pushConstants{};
+    pushConstants.offset = 0;
+    pushConstants.size = sizeof(pushConstant);
+    pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    computeLayout.pPushConstantRanges = &pushConstants;
+    computeLayout.pushConstantRangeCount = 1;
+
+    VK_CHECK(vkCreatePipelineLayout(device, &computeLayout, nullptr, &_postPipelineLayout));
+
+    //Create Shaader
+    VkShaderModule postShader;
+    if (!vkutil::LoadShaderModule("../shaders/post.slang.spv", device, &postShader))
+    {
+        fmt::println("Error when building a compute shader");
+    }
+
+    VkPipelineShaderStageCreateInfo stageInfo{ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr };
+    stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    stageInfo.pNext = nullptr;
+    stageInfo.module = postShader;
+    stageInfo.pName = "main";
+
+    VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
+    computePipelineCreateInfo.layout = _postPipelineLayout;
+    computePipelineCreateInfo.stage = stageInfo;
+
+    VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &postPipeline));
+
+    vkDestroyShaderModule(device, postShader, nullptr);
+
+    engine._mainDeletionQueue.Push([=]()
+    {
+        vkDestroyPipelineLayout(device, _postPipelineLayout, nullptr);
+        vkDestroyPipeline(device, postPipeline, nullptr);
+    });
+}
+
+void PostPass::OnDestroy()
+{
+    //auto& engine = VulkanEngine::Get();
+    //vkDestroyDescriptorSetLayout(engine._device, _postLayout, nullptr);
+}
+
+void PostPass::WriteDescriptors(VulkanEngine* engine, RenderPipeline* pipeline)
+{
+    {
+        VKDescriptors::DescriptorLayoutBuilder builder;
+        _postLayout = builder
+            .AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .Build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT);
+    }
+    //Alloc a descriiptorset for our draw image
+    _postDescriptor = engine->globalDescriptiorAllocator.Allocate(engine->_device, _postLayout);
+
+    VKDescriptors::DescriptorWriter writer;
+    writer.WriteImage(0, engine->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+    writer.UpdateSet(engine->_device, _postDescriptor);
 }
