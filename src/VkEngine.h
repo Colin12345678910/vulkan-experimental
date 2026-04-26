@@ -121,7 +121,10 @@ public:
 	VkExtent2D _swapchainExtent;
 
 	AllocatedImage _drawImage;
+	AllocatedImage _intermediate0;
+	AllocatedImage _intermediate1;
 	AllocatedImage _depthImage;
+	std::vector<AllocatedImage*> drawImages;
 
 	VkExtent2D _drawExtent;
 	float renderScale = 1.0f;
@@ -206,6 +209,7 @@ public:
 	AllocatedImage CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateCubeImage");
 	AllocatedImage CreateCubeImage(const std::vector<std::vector<char>>& data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
 	AllocatedImage CopyDataToImage(const void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
+	void FillDrawImage(AllocatedImage* image, bool isDepth);
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, std::string name = "VulkanEngine::Internal::Staging");
 	void DestroyBuffer(const AllocatedBuffer& buffer);

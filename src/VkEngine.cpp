@@ -123,6 +123,14 @@ void VulkanEngine::init(ExitInstructions instructions)
 
     InitializeSwapchain();
 
+    _mainDeletionQueue.Push([&]()
+    {
+        for(auto img : drawImages)
+        {
+            img->Destroy(_device, _allocator);
+        }
+    });
+
     InitalizeCommands();
 
     InitializeSyncStructures();
@@ -609,87 +617,59 @@ void VulkanEngine::InitializeSwapchain()
 {
     if (requestResize)
     {
-        vkDestroyImageView(_device, _drawImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
+        for (auto image : drawImages)
+        {
+            vkDestroyImageView(_device, image->imageView, nullptr);
+            vmaDestroyImage(_allocator, image->image, image->allocation);
 
-        vkDestroyImageView(_device, _depthImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
+            bool isDepth = image->imageFormat == VK_FORMAT_D32_SFLOAT;
+            FillDrawImage(image, isDepth);
+        }
+        _renderPipeline.UpdateFramebuffers();
+    }
+    else
+    {
+        _drawImage = {};
+        _depthImage = {};
+        _intermediate0 = {};
+        _intermediate1 = {};
 
-        //DestroySwapchain();
+        FillDrawImage(&_drawImage, false);
+        FillDrawImage(&_depthImage, true);
+        FillDrawImage(&_intermediate0, false);
+        FillDrawImage(&_intermediate1, false);
+
+        drawImages.push_back(&_drawImage);
+        drawImages.push_back(&_depthImage); 
+        drawImages.push_back(&_intermediate0);
+        drawImages.push_back(&_intermediate1);
+
+        _renderPipeline.images["vk::draw"] = &_drawImage;
+        _renderPipeline.images["vk::intermediate::0"] = &_intermediate0;
+        _renderPipeline.images["vk::intermediate::1"] = &_intermediate1;
     }
 
     CreateSwapchain();
 
-    int w, h;
-    SDL_GetWindowSize(_window, &w, &h);
 
-    VkExtent3D drawImageExtent =
-    {
-        (uint32_t)w,
-        (uint32_t)h,
-        //std::max(_windowExtent.width, (uint32_t)w),
-        //std::max(_windowExtent.height, (uint32_t)h),
-        1
-    };
+    // _mainDeletionQueue.Push([=]() {
+    //     //Overall, this is a hack, like 100% a hack. What we are doing is checking if we've already deallocated the 
+    //     // image and returning if thats the case. This only happens bc we reinit the entire swapchain when we rescale the
+    //     // window. The reason we do that is kinda obvious, but I never want the engine to render a scene weirdly because a player
+    //     // opened it on a smaller monitor and then maximized on a different one.
+    //     // Because of this, we need to push every single new alloc to the deletion queue, however, that image may become stale later
 
-    _drawExtent.height = h;
-    _drawExtent.width = w;
+    //     if (_drawImage.deallocated)
+    //     {
+    //         return;
+    //     }
+    //     vkDestroyImageView(_device, _drawImage.imageView, nullptr);
+    //     vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
 
-    _drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-    _drawImage.imageExtent = drawImageExtent;
-
-    VkImageUsageFlags drawImageUsage{};
-    drawImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    drawImageUsage |= VK_IMAGE_USAGE_STORAGE_BIT; //Compute shader can write to it
-    drawImageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    VkImageCreateInfo createImageInfo = vkinit::image_create_info(_drawImage.imageFormat, drawImageUsage, drawImageExtent);
-
-    //We must allocate the image on the GPU
-    VmaAllocationCreateInfo vmaImageAllocInfo{};
-    vmaImageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    vmaImageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VK_CHECK(vmaCreateImage(_allocator, &createImageInfo, &vmaImageAllocInfo, &_drawImage.image, &_drawImage.allocation, nullptr));
-
-    //BUild an imgView
-    VkImageViewCreateInfo imageViewCreate = vkinit::imageview_create_info(_drawImage.imageFormat, _drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-    VK_CHECK(vkCreateImageView(_device, &imageViewCreate, nullptr, &_drawImage.imageView));
-
-    //Make DepthTexture
-    _depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
-    _depthImage.imageExtent = drawImageExtent;
-    VkImageUsageFlags depthImageUsages{};
-    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    VkImageCreateInfo dimgInfo = vkinit::image_create_info(_depthImage.imageFormat, depthImageUsages, drawImageExtent);
-
-    //ALlocate and create an image;
-    VK_CHECK(vmaCreateImage(_allocator, &dimgInfo, &vmaImageAllocInfo, &_depthImage.image, &_depthImage.allocation, nullptr));
-
-    //Build an imageView 
-    VkImageViewCreateInfo depthViewInfo = vkinit::imageview_create_info(_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-    VK_CHECK(vkCreateImageView(_device, &depthViewInfo, nullptr, &_depthImage.imageView));
-
-    _mainDeletionQueue.Push([=]() {
-        //Overall, this is a hack, like 100% a hack. What we are doing is checking if we've already deallocated the 
-        // image and returning if thats the case. This only happens bc we reinit the entire swapchain when we rescale the
-        // window. The reason we do that is kinda obvious, but I never want the engine to render a scene weirdly because a player
-        // opened it on a smaller monitor and then maximized on a different one.
-        // Because of this, we need to push every single new alloc to the deletion queue, however, that image may become stale later
-
-        if (_drawImage.deallocated)
-        {
-            return;
-        }
-        vkDestroyImageView(_device, _drawImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
-
-        vkDestroyImageView(_device, _depthImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
-        _drawImage.deallocated = true;
-    });
+    //     vkDestroyImageView(_device, _depthImage.imageView, nullptr);
+    //     vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
+    //     _drawImage.deallocated = true;
+    // });
 }
 
 void VulkanEngine::InitalizeCommands()
@@ -1801,6 +1781,61 @@ AllocatedImage VulkanEngine::CopyDataToImage(const void* data, AllocatedImage im
     DestroyBuffer(uploadBuff);
 
     return img;
+}
+
+/* FillDrawImage
+Creates an drawimage in situ (inplace) which is used exclusively for our drawImage abstraction.
+Do not use this for normal images.
+*/
+void VulkanEngine::FillDrawImage(AllocatedImage* image, bool isDepth)
+{
+    int w, h;
+    SDL_GetWindowSize(_window, &w, &h);
+
+    VkExtent3D drawImageExtent =
+    {
+        (uint32_t)w,
+        (uint32_t)h,
+        //std::max(_windowExtent.width, (uint32_t)w),
+        //std::max(_windowExtent.height, (uint32_t)h),
+        1
+    };
+
+    image->imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    image->imageExtent = drawImageExtent;
+
+    VkImageUsageFlags drawImageUsage{};
+    drawImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    drawImageUsage |= VK_IMAGE_USAGE_STORAGE_BIT; //Compute shader can write to it
+    drawImageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+   
+
+    if (isDepth)
+    {
+        image->imageFormat = VK_FORMAT_D32_SFLOAT;
+        drawImageUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+ 
+    VkImageCreateInfo createImageInfo = vkinit::image_create_info(image->imageFormat, drawImageUsage, drawImageExtent);
+    //We must allocate the image on the GPU
+    VmaAllocationCreateInfo vmaImageAllocInfo{};
+    vmaImageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    vmaImageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    VK_CHECK(vmaCreateImage(_allocator, &createImageInfo, &vmaImageAllocInfo, &image->image, &image->allocation, nullptr));
+
+    //BUild an imgView
+    VkImageViewCreateInfo imageViewCreate{};
+    if (!isDepth)
+    {
+        imageViewCreate = vkinit::imageview_create_info(image->imageFormat, image->image, VK_IMAGE_ASPECT_COLOR_BIT);
+    }
+    else
+    {
+        imageViewCreate = vkinit::imageview_create_info(image->imageFormat, image->image, VK_IMAGE_ASPECT_DEPTH_BIT);
+    }
+    VK_CHECK(vkCreateImageView(_device, &imageViewCreate, nullptr, &image->imageView));
 }
 
 void VulkanEngine::DestroyImage(const AllocatedImage& img)

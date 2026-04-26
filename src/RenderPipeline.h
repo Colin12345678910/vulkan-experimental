@@ -12,6 +12,8 @@ public:
 	virtual void OnCreate(RenderPipeline* pipeline) = 0;
 	virtual void OnDestroy() = 0;
 	virtual void OnImGUI() {};
+	virtual void OnFrameBufferUpdate(RenderPipeline* pipeline) {};
+
 	virtual ~RenderPass() {};
 
 	bool isActive = true;
@@ -53,8 +55,9 @@ public:
 	void Draw(VkCommandBuffer cmd, RenderPipeline* pipeline) override;
 	void OnCreate(RenderPipeline* pipeline) override;
 	void OnDestroy() override;
+	void OnFrameBufferUpdate(RenderPipeline* pipeline) override;
 
-	void WriteDescriptors(VulkanEngine* engine, RenderPipeline* pipeline);
+	void WriteDescriptors(RenderPipeline* pipeline, std::string src, std::string dst);
 
 	struct pushConstant
 	{
@@ -65,7 +68,8 @@ public:
 	};
 
 	VkDescriptorSetLayout _postLayout;
-	VkDescriptorSet _postDescriptor;
+	VkDescriptorSet _postDescriptorPing;
+	VkDescriptorSet _postDescriptorPong;
 	VkPipelineLayout _postPipelineLayout;
 	VkPipeline postPipeline;
 };
@@ -73,12 +77,13 @@ public:
 class RenderPipeline
 {
 public:
-	std::unordered_map<std::string, AllocatedImage> images;
+	std::unordered_map<std::string, AllocatedImage*> images;
 
 	std::vector<std::unique_ptr<RenderPass>> renderPasses;
 	
 	void Draw(VkCommandBuffer cmd);
 	void ImGUI();
 	void Create();
+	void UpdateFramebuffers();
 	void Destroy();
 };

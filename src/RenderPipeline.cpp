@@ -52,6 +52,14 @@ void RenderPipeline::Create()
 	}
 }
 
+void RenderPipeline::UpdateFramebuffers()
+{
+    for (auto& pass : renderPasses)
+	{
+		pass->OnFrameBufferUpdate(this);
+	}
+}
+
 void RenderPipeline::Destroy()
 {
 	for (auto& pass : renderPasses)
@@ -203,7 +211,7 @@ void GeometryPass::Draw(VkCommandBuffer cmd, RenderPipeline* pipeline)
 
     writer
         .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-        .WriteImage(1, pipeline->images["vk::shadow"].imageView, engine.GetDefaultSampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+        .WriteImage(1, pipeline->images["vk::shadow"]->imageView, engine.GetDefaultSampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
         .UpdateSet(engine._device, globalDescriptor);
 
     engine.DrawGeometry(cmd, globalDescriptor);
@@ -238,19 +246,19 @@ void ShadowPass::Draw(VkCommandBuffer cmd, RenderPipeline* pipeline)
     */
 
     //Transition the shadowmap for the next frame.
-    vkutil::TransitionImage(cmd, pipeline->images["vk::shadow"].image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    vkutil::TransitionImage(cmd, pipeline->images["vk::shadow"]->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     auto globalDescriptor = engine.SetupShadows(cmd);
     shadowMap.Draw(cmd, globalDescriptor);
 
-    vkutil::TransitionImage(cmd, pipeline->images["vk::shadow"].image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+    vkutil::TransitionImage(cmd, pipeline->images["vk::shadow"]->image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void ShadowPass::OnCreate(RenderPipeline* pipeline)
 {
     // Load Shadowmaps
     shadowMap.Init();
-    pipeline->images["vk::shadow"] = shadowMap.depthImage;
+    pipeline->images["vk::shadow"] = &shadowMap.depthImage;
 }
 
 void ShadowPass::OnDestroy()
@@ -283,9 +291,18 @@ void PostPass::Draw(VkCommandBuffer cmd, RenderPipeline* renderPipeline)
     //Testing if shader works in general
     for (int i = 0; i < CVAR_operations.Get(); i++)
     {
+        if (i % 2 == 0)
+        {
+            //Bind the descriptorSet
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _postPipelineLayout, 0, 1, &_postDescriptorPing, 0, nullptr);
+        }
+        else
+        {
+            //Bind the descriptorSet
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _postPipelineLayout, 0, 1, &_postDescriptorPong, 0, nullptr);
+        }
+
         constants.pixelOffset = i;
-        //Bind the descriptorSet
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _postPipelineLayout, 0, 1, &engine._drawImageDescriptors, 0, nullptr);
 
         vkCmdPushConstants(cmd, _postPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstant), &constants);
 
@@ -298,13 +315,23 @@ void PostPass::OnCreate(RenderPipeline* pipeline)
 {
     auto& engine = VulkanEngine::Get();
     auto device = engine._device;
+    {
+        VKDescriptors::DescriptorLayoutBuilder builder;
+        _postLayout = builder
+            .AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .Build(engine._device, VK_SHADER_STAGE_COMPUTE_BIT);
+    }
+    //Alloc a descriiptorset for our draw image
+    _postDescriptorPing = engine.globalDescriptiorAllocator.Allocate(engine._device, _postLayout);
+    _postDescriptorPong = engine.globalDescriptiorAllocator.Allocate(engine._device, _postLayout);
 
-    //WriteDescriptors(&engine, pipeline);
+    WriteDescriptors(pipeline, "vk::draw", "vk::intermediate::0");
 
     VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
     //Define the descriptor used for this pipeline.
     computeLayout.setLayoutCount = 1;
-    computeLayout.pSetLayouts = &engine._drawImageDescriptorLayout;
+    computeLayout.pSetLayouts = &_postLayout;
 
     VkPushConstantRange pushConstants{};
     pushConstants.offset = 0;
@@ -350,19 +377,28 @@ void PostPass::OnDestroy()
     //vkDestroyDescriptorSetLayout(engine._device, _postLayout, nullptr);
 }
 
-void PostPass::WriteDescriptors(VulkanEngine* engine, RenderPipeline* pipeline)
+void PostPass::OnFrameBufferUpdate(RenderPipeline* pipeline)
 {
+    WriteDescriptors(pipeline, "vk::draw", "vk::intermediate::0");
+}
+
+void PostPass::WriteDescriptors(RenderPipeline* pipeline, std::string src, std::string dst)
+{
+    auto& engine = VulkanEngine::Get();
+
     {
-        VKDescriptors::DescriptorLayoutBuilder builder;
-        _postLayout = builder
-            .AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
-            .Build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT);
+        VKDescriptors::DescriptorWriter writer;
+        writer
+            .WriteImage(0, pipeline->images[src]->imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .WriteImage(1, pipeline->images[dst]->imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .UpdateSet(engine._device, _postDescriptorPing);
     }
-    //Alloc a descriiptorset for our draw image
-    _postDescriptor = engine->globalDescriptiorAllocator.Allocate(engine->_device, _postLayout);
-
-    VKDescriptors::DescriptorWriter writer;
-    writer.WriteImage(0, engine->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-
-    writer.UpdateSet(engine->_device, _postDescriptor);
+    
+    {
+        VKDescriptors::DescriptorWriter writer;
+        writer
+            .WriteImage(0, pipeline->images[dst]->imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .WriteImage(1, pipeline->images[src]->imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
+            .UpdateSet(engine._device, _postDescriptorPong);
+    }
 }

@@ -1,4 +1,5 @@
-RWTexture2D<float4> image;
+RWTexture2D<float4> src;
+RWTexture2D<float4> dst;
 
 // push constants block
 struct PushConstants
@@ -24,11 +25,11 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
 
     // Sample the four corners.
     float4 color = float4(0.0);
-    color += image[texelCoord + int2(float2(o.x, o.y))];
-    color += image[texelCoord + int2(float2(-o.x, o.y))];
-    color += image[texelCoord + int2(float2(-o.x, -o.y))];
-    color += image[texelCoord + int2(float2(o.x, -o.y))];
+    color += src[texelCoord + int2(float2(o.x, o.y))];
+    color += src[texelCoord + int2(float2(-o.x, o.y))];
+    color += src[texelCoord + int2(float2(-o.x, -o.y))];
+    color += src[texelCoord + int2(float2(o.x, -o.y))];
     color /= 4.0;
 
-    image[texelCoord] = color * pushConstants.strength;
+    dst[texelCoord] = color * pushConstants.strength;
 }

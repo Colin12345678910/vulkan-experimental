@@ -95,6 +95,17 @@ struct AllocatedImage
 
         return dataSize;
     }
+
+    void Destroy(VkDevice device, VmaAllocator allocator)
+    {
+        if (deallocated)
+        {
+            return;
+        }
+        vkDestroyImageView(device, imageView, nullptr);
+        vmaDestroyImage(allocator, image, allocation);
+        deallocated = true;
+    }
 };
 struct AllocatedBuffer
 {
