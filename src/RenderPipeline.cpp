@@ -373,8 +373,8 @@ void PostPass::OnCreate(RenderPipeline* pipeline)
 
 void PostPass::OnDestroy()
 {
-    //auto& engine = VulkanEngine::Get();
-    //vkDestroyDescriptorSetLayout(engine._device, _postLayout, nullptr);
+    auto& engine = VulkanEngine::Get();
+    vkDestroyDescriptorSetLayout(engine._device, _postLayout, nullptr);
 }
 
 void PostPass::OnFrameBufferUpdate(RenderPipeline* pipeline)
