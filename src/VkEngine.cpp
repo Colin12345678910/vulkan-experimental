@@ -578,15 +578,35 @@ void VulkanEngine::InitializeVulkan()
     //use vkbootstrap to select a gpu. 
     //We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
     vkb::PhysicalDeviceSelector selector{ vbInstance };
-    vkb::PhysicalDevice physicalDevice = selector
+    vkb::PhysicalDevice physicalDevice;
+    auto devices = selector
         .set_minimum_version(1, 3)
         .set_required_features_13(features)
         .set_required_features_12(features12)
 		.set_required_features(featuresBase)
         .set_surface(_surface)
-        .select()
-        .value();
+        .prefer_gpu_device_type(vkb::PreferredDeviceType::discrete)
+        .select_devices();
 
+    if (devices.has_value())
+    {
+        //Override the selected device with NVIDIA or AMD if available.
+        physicalDevice = devices.value()[0];
+        for(auto d : devices.value())
+        {
+            if (d.properties.vendorID == VendorID::NVIDIA || d.properties.vendorID == VendorID::AMD)
+            {
+                physicalDevice = d;
+                break;
+            }
+        }
+    }   
+    else
+    {
+        //This isn't clean, but it should at least tell people whats wrong.
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "No valid Vulkan device found", "Your device either doesn't support Vulkan 1.2, or it is not functioning, this application will now close.", _window);
+        throw std::runtime_error("No Vulkan device found");
+    } 
 
     //create the final vulkan device
     vkb::DeviceBuilder deviceBuilder{ physicalDevice };

@@ -234,3 +234,10 @@ struct DrawContext
     std::vector<RenderObject> OpaqueSurfaces;
 	std::vector<RenderObject> TransparentSurfaces;
 };
+
+enum VendorID
+{
+    AMD = 0x1022,
+    NVIDIA = 0x10DE,
+    INTEL = 0x8086
+};
