@@ -19,8 +19,7 @@ public:
 	{
 		float pixelOffset;
 		float samplePosMult;
-		float strength;
-		float padding;
+		glm::ivec2 screenSize;
 	};
 
 	VkDescriptorSetLayout _postLayout;

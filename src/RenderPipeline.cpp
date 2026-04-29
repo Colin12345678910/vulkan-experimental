@@ -26,7 +26,7 @@ void RenderPipeline::ImGUI()
     }
     for (int i = 0; i < renderPasses.size(); i++)
     {
-        ImGui::Checkbox(fmt::format("RenderPass {}", renderPasses[i].get()->GetName()).c_str(), &renderPasses[i]->isActive);
+        ImGui::Checkbox(fmt::format("RP: {}", renderPasses[i].get()->GetName()).c_str(), &renderPasses[i]->isActive);
     }
 }
 

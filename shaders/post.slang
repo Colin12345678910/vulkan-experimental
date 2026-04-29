@@ -6,11 +6,16 @@ struct PushConstants
 {
     float pixelOffset;
     float samplePosMult;
-    float strength;
-    float padding;
+    int2 screenSize;
 };
 
 [[vk::push_constant]] PushConstants pushConstants;
+
+float4 Texture(int2 texelCoord)
+{
+    texelCoord = clamp(texelCoord, int2(0, 0), pushConstants.screenSize);
+    return src[texelCoord];
+}
 
 // Basic implementation of the Kawase blur filter.
 // As described: https://blog.frost.kiwi/dual-kawase/
@@ -25,11 +30,11 @@ void Main(uint2 dispatchThreadID: SV_DispatchThreadID)
 
     // Sample the four corners.
     float4 color = float4(0.0);
-    color += src[texelCoord + int2(float2(o.x, o.y))];
-    color += src[texelCoord + int2(float2(-o.x, o.y))];
-    color += src[texelCoord + int2(float2(-o.x, -o.y))];
-    color += src[texelCoord + int2(float2(o.x, -o.y))];
+    color += Texture(texelCoord + int2(float2(o.x, o.y)));
+    color += Texture(texelCoord + int2(float2(-o.x, o.y)));
+    color += Texture(texelCoord + int2(float2(-o.x, -o.y)));
+    color += Texture(texelCoord + int2(float2(o.x, -o.y)));
     color /= 4.0;
 
-    dst[texelCoord] = color * pushConstants.strength;
+    dst[texelCoord] = color;
 }

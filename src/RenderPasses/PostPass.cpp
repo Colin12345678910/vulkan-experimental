@@ -1,18 +1,17 @@
 #include "PostPass.h"
 #include "VkEngine.h"
 
-AutoFloatCVar CVAR_kawase_strength("kawase.strength", "Position of the Shadowmap in the X plane", 1.0f, 10.0f);
-AutoFloatCVar CVAR_kawase_samplePosMult("kawase.samplePosMult", "Position of the Shadowmap in the Z plane", 1.0f, 10.0f);
-AutoIntCVar CVAR_operations("kawase.operations", "num", 0); //Since we lack a ping-pong buffer, it's set to 0
+AutoFloatCVar CVAR_kawase_samplePosMult("kawase.samplePosMult", "The multiplier of the offset used in the kawase filter", 1.0f, 10.0f);
+AutoIntCVar CVAR_operations("kawase.operations", "Number of 'ping pongs' that the filter will perform", 4);
 
 void PostPass::Draw(VkCommandBuffer cmd, RenderPipeline* renderPipeline)
 {
     auto& engine = VulkanEngine::Get();
 
     pushConstant constants{};
-    constants.strength = CVAR_kawase_strength.Get();
     constants.pixelOffset = 0;
     constants.samplePosMult = CVAR_kawase_samplePosMult.Get();
+    constants.screenSize = glm::ivec2(engine._windowExtent.width - 1, engine._windowExtent.height - 1);
 
     //Bind the gradientPipeline
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, postPipeline);
@@ -92,6 +91,9 @@ void PostPass::OnCreate(RenderPipeline* pipeline)
     VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &postPipeline));
 
     vkDestroyShaderModule(device, postShader, nullptr);
+
+    //automatically set the filter to off by default
+    isActive = false;
 
     engine._mainDeletionQueue.Push([=]()
     {
