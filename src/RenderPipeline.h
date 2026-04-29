@@ -1,10 +1,10 @@
 #pragma once
-#include "RenderPass.h"
+#include "RenderPasses/RenderPass.h"
 #include "VkTypes.h"
-#include "PostPass.h"
-#include "ShadowPass.h"
-#include "GeometryPass.h"
-#include "BackgroundPass.h"
+#include "RenderPasses/PostPass.h"
+#include "RenderPasses/ShadowPass.h"
+#include "RenderPasses/GeometryPass.h"
+#include "RenderPasses/BackgroundPass.h"
 
 class RenderPipeline
 {

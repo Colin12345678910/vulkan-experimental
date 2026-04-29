@@ -117,8 +117,6 @@ void BackgroundPass::OnImGUI()
 
     ImGui::Text("Selected effect: ", selected.name);
 
-    ImGui::SliderInt("Effect Index", &engine.currentBackground, 0, engine.backgroundEffects.size() - 1);
-
     ImGui::InputFloat4("data1", (float*)&selected.data.data1);
     ImGui::InputFloat4("data2", (float*)&selected.data.data2);
     ImGui::InputFloat4("data3", (float*)&selected.data.data3);

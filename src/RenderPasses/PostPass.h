@@ -7,6 +7,7 @@ class PostPass : public RenderPass
 {
 public:
 	PostPass() {};
+	std::string GetName() override { return "Kawase Pass"; }
 	void Draw(VkCommandBuffer cmd, RenderPipeline* pipeline) override;
 	void OnCreate(RenderPipeline* pipeline) override;
 	void OnDestroy() override;
