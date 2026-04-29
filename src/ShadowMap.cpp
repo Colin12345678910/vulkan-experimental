@@ -28,17 +28,13 @@ std::function<void()> ShadowMap::ClearResources(VulkanEngine& engine)
     };
 }
 
-void ShadowMap::Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor, VKDescriptors::DescriptorWriter writer, AllocatedBuffer gpuSceneDataBuf)
+void ShadowMap::Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor)
 {
 	VulkanEngine& engine = VulkanEngine::Get();
 
     VkExtent2D imgExtent;
     imgExtent.width = depthImage.imageExtent.width;
     imgExtent.height = depthImage.imageExtent.height;
-
-    writer
-        .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-        .UpdateSet(engine._device, globalDescriptor);
 
     //Begin a render pass to our drawImage
     VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(nullptr, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);

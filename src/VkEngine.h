@@ -20,7 +20,7 @@
 #include <unordered_set>
 #include "VkImages.h"
 #include "VkPipelines.h"
-
+#include "RenderPipeline.h"
 #include <GLTFMetalicRoughness.h>
 
 #include "Camera.h"
@@ -121,7 +121,10 @@ public:
 	VkExtent2D _swapchainExtent;
 
 	AllocatedImage _drawImage;
+	AllocatedImage _intermediate0;
+	AllocatedImage _intermediate1;
 	AllocatedImage _depthImage;
+	std::vector<AllocatedImage*> drawImages;
 
 	VkExtent2D _drawExtent;
 	float renderScale = 1.0f;
@@ -134,8 +137,7 @@ public:
 	DrawContext mainDrawCtx;
 	std::unordered_map < std::string, std::shared_ptr<RenderNode>> loadedNodes;
 	
-	//VkPipeline _gradientPipeline;
-	VkPipelineLayout _computePipelineLayout;
+	
 
 	//Here's our basic ShaderLayouts
 	VkPipelineLayout _meshPipelineLayout;
@@ -169,6 +171,7 @@ public:
 
 	GLTFMetallicRoughness metalRoughMaterial;
 	MaterialInstance defaultMaterial;
+	GPUSceneData _sceneData;
 
 	EngineStats stats;
 
@@ -191,8 +194,6 @@ public:
 
 	std::vector<std::function<void()>> _drawList;
 
-	void drawBackground(VkCommandBuffer cmd);
-
 	double DeltaTime() { return stats.frameTime; }
 
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
@@ -208,6 +209,7 @@ public:
 	AllocatedImage CreateCubeImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "VulkanEngine::CreateCubeImage");
 	AllocatedImage CreateCubeImage(const std::vector<std::vector<char>>& data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, std::string name);
 	AllocatedImage CopyDataToImage(const void* data, AllocatedImage img, int mip = 0, int face = 0, uint32_t dataSize = 0);
+	void FillDrawImage(AllocatedImage* image, bool isDepth);
 
 	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, std::string name = "VulkanEngine::Internal::Staging");
 	void DestroyBuffer(const AllocatedBuffer& buffer);
@@ -215,6 +217,9 @@ public:
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
 	void FlushDrawCtx(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor, VkPipeline pipelineOverride, VkPipelineLayout pipelineLayoutOverride);
 
+	AllocatedBuffer SetupGeometry(VkCommandBuffer cmd);
+	void DrawGeometry(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor);
+	VkDescriptorSet SetupShadows(VkCommandBuffer cmd);
 	
 	void ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function);
 	//run main loop
@@ -234,12 +239,9 @@ private:
 	void InitializeDefaultData();
 	void InitializeImgui();
 	void ResizeSwapchain();
-	void DrawGeometry(VkCommandBuffer cmd);
-	void DrawShadows(VkCommandBuffer cmd);
 	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void UpdateScene();
 
-	GPUSceneData _sceneData;
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 
 	//Images
@@ -251,6 +253,8 @@ private:
 	AllocatedImage _noiseImage;
 	AllocatedBuffer screenshotBuffer;
 
+	RenderPipeline _renderPipeline;
+
 	HDRI hdri;
 
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
@@ -258,9 +262,6 @@ private:
 	VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
-	std::vector<IGeometryPass*> geometryPasses;
-
-	ShadowMap shadowMap;
 	void CreateSwapchain();
 	void DestroySwapchain();
 	bool IsVisible(const RenderObject& obj, const glm::mat4& viewProj);

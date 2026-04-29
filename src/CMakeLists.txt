@@ -35,6 +35,17 @@ add_library(vk_core STATIC
   IRenderpass.h
   HDRI.cpp
   HDRI.h
+  RenderPipeline.cpp
+  RenderPipeline.h
+  RenderPasses/RenderPass.h
+  RenderPasses/PostPass.cpp
+  RenderPasses/PostPass.h
+  RenderPasses/ShadowPass.cpp
+  RenderPasses/ShadowPass.h
+  RenderPasses/GeometryPass.cpp
+  RenderPasses/GeometryPass.h
+  RenderPasses/BackgroundPass.cpp
+  RenderPasses/BackgroundPass.h
   TBin.h
 )
 

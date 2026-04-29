@@ -123,6 +123,14 @@ void VulkanEngine::init(ExitInstructions instructions)
 
     InitializeSwapchain();
 
+    _mainDeletionQueue.Push([&]()
+    {
+        for(auto img : drawImages)
+        {
+            img->Destroy(_device, _allocator);
+        }
+    });
+
     InitalizeCommands();
 
     InitializeSyncStructures();
@@ -134,6 +142,9 @@ void VulkanEngine::init(ExitInstructions instructions)
     InitializePipelines();
 
     InitializeImgui();
+
+    _renderPipeline.Create();
+    _mainDeletionQueue.Push([&]() { _renderPipeline.Destroy(); });
 
     hdri.LoadHDRI("../assets/hdri/base.hdr", this);
 
@@ -150,10 +161,6 @@ void VulkanEngine::init(ExitInstructions instructions)
 	//assert(structure.has_value(), "Failed to load structure glb file");
 
 	loadedScenes["structure"] = structure.value();
-
-    // Load Shadowmaps
-    shadowMap.Init();
-	geometryPasses.push_back(&shadowMap);
 
     // everything went fine
     _isInitialized = true;
@@ -249,39 +256,17 @@ void VulkanEngine::draw()
 
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    if (CVAR_DoShadows.Get())
-    {
-        /*
-        * Yea, I don't know how I didn't realize that I could just sneak the 
-        * shadowpass rendering into the main queue, there is literally zero
-        * reason for the CPU to care about the status of the shadowpass anyway.
-        * 
-        * So enjoy this hilariously simplified shadowcasting code.
-        * Extra performance for no cost is always a win
-        */
-
-        //Transition the shadowmap for the next frame.
-        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-        DrawShadows(cmd);
-    }
-
     //Convert our main drawImage into a layout for writing, and clearing it.
     vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    vkutil::TransitionImage(cmd, _intermediate0.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    vkutil::TransitionImage(cmd, _intermediate1.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-    drawBackground(cmd);
-
-    //Transition to colorAtt optimal bc geometry cannot draw on General.
-    vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     vkutil::TransitionImage(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    
-    if (CVAR_DoShadows.Get())
-        vkutil::TransitionImage(cmd, shadowMap.depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    DrawGeometry(cmd);
+    _renderPipeline.Draw(cmd);
 
     //Convert the drawimage into a transfer src and the swapchain into a transferDst
-    vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vkutil::TransitionImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     vkutil::TransitionImage(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     //copy image from drawImage to swapchain.
@@ -391,34 +376,6 @@ void VulkanEngine::draw()
     _frameNumber++;
 }
 
-void VulkanEngine::drawBackground(VkCommandBuffer cmd)
-{
-    VkClearColorValue clear;
-    float flash = std::abs(std::sin(_frameNumber / 480.f));
-    clear = { { 0.0f, 0.0f, flash, 1.0f } };
-
-    VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-    
-    ComputeEffect& effect = backgroundEffects[currentBackground];
-    effect.data.viewProj = glm::inverse(_sceneData.view);//glm::inverse(_camera.getRotation());
-	effect.data.invProj = glm::inverse(_sceneData.proj);
-
-    effect.data.cameraPos = _camera.getPosition();
-    effect.data.data4 = _sceneData.time;
-    effect.data.screenDimensions = glm::ivec4(_drawExtent.width, _drawExtent.height, 0, 0);
-
-    //Bind the gradientPipeline
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-
-    //Bind the descriptorSet
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _computePipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
-
-    vkCmdPushConstants(cmd, _computePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
-
-    //Exec w workgroups of 16
-    vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
-}
-
 void VulkanEngine::run()
 {
     SDL_Event e;
@@ -522,16 +479,7 @@ void VulkanEngine::run()
             //ImGui::LabelText("Frame", std::to_string(framerate).c_str());
             ImGui::SliderFloat("Render Scale", &renderScale, 0.1f, 1.0f);
 
-            ComputeEffect& selected = backgroundEffects[currentBackground];
-
-            ImGui::Text("Selected effect: ", selected.name);
-
-            ImGui::SliderInt("Effect Index", &currentBackground, 0, backgroundEffects.size() - 1);
-
-            ImGui::InputFloat4("data1", (float*)&selected.data.data1);
-            ImGui::InputFloat4("data2", (float*)&selected.data.data2);
-            ImGui::InputFloat4("data3", (float*)&selected.data.data3);
-            ImGui::InputFloat4("data4", (float*)&selected.data.data4);
+            _renderPipeline.ImGUI();
         }
         ImGui::End();
 
@@ -545,10 +493,6 @@ void VulkanEngine::run()
 			ImGui::Text("Drawcalls: %i", stats.drawCalls);
             ImGui::Text("Transparents: %i", stats.drawCalls);
         }
-        ImGui::End();
-
-        ImGui::Begin("Camera");
-        shadowMap.TransferMapToR32(VulkanEngine::Get());
         ImGui::End();
 
         if (ImGui::Begin("CVars"))
@@ -634,15 +578,35 @@ void VulkanEngine::InitializeVulkan()
     //use vkbootstrap to select a gpu. 
     //We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
     vkb::PhysicalDeviceSelector selector{ vbInstance };
-    vkb::PhysicalDevice physicalDevice = selector
+    vkb::PhysicalDevice physicalDevice;
+    auto devices = selector
         .set_minimum_version(1, 3)
         .set_required_features_13(features)
         .set_required_features_12(features12)
 		.set_required_features(featuresBase)
         .set_surface(_surface)
-        .select()
-        .value();
+        .prefer_gpu_device_type(vkb::PreferredDeviceType::discrete)
+        .select_devices();
 
+    if (devices.has_value())
+    {
+        //Override the selected device with NVIDIA or AMD if available.
+        physicalDevice = devices.value()[0];
+        for(auto d : devices.value())
+        {
+            if (d.properties.vendorID == VendorID::NVIDIA || d.properties.vendorID == VendorID::AMD)
+            {
+                physicalDevice = d;
+                break;
+            }
+        }
+    }   
+    else
+    {
+        //This isn't clean, but it should at least tell people whats wrong.
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "No valid Vulkan device found", "Your device either doesn't support Vulkan 1.2, or it is not functioning, this application will now close.", _window);
+        throw std::runtime_error("No Vulkan device found");
+    } 
 
     //create the final vulkan device
     vkb::DeviceBuilder deviceBuilder{ physicalDevice };
@@ -675,87 +639,59 @@ void VulkanEngine::InitializeSwapchain()
 {
     if (requestResize)
     {
-        vkDestroyImageView(_device, _drawImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
+        for (auto image : drawImages)
+        {
+            vkDestroyImageView(_device, image->imageView, nullptr);
+            vmaDestroyImage(_allocator, image->image, image->allocation);
 
-        vkDestroyImageView(_device, _depthImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
+            bool isDepth = image->imageFormat == VK_FORMAT_D32_SFLOAT;
+            FillDrawImage(image, isDepth);
+        }
+        _renderPipeline.UpdateFramebuffers();
+    }
+    else
+    {
+        _drawImage = {};
+        _depthImage = {};
+        _intermediate0 = {};
+        _intermediate1 = {};
 
-        //DestroySwapchain();
+        FillDrawImage(&_drawImage, false);
+        FillDrawImage(&_depthImage, true);
+        FillDrawImage(&_intermediate0, false);
+        FillDrawImage(&_intermediate1, false);
+
+        drawImages.push_back(&_drawImage);
+        drawImages.push_back(&_depthImage); 
+        drawImages.push_back(&_intermediate0);
+        drawImages.push_back(&_intermediate1);
+
+        _renderPipeline.images["vk::draw"] = &_drawImage;
+        _renderPipeline.images["vk::intermediate::0"] = &_intermediate0;
+        _renderPipeline.images["vk::intermediate::1"] = &_intermediate1;
     }
 
     CreateSwapchain();
 
-    int w, h;
-    SDL_GetWindowSize(_window, &w, &h);
 
-    VkExtent3D drawImageExtent =
-    {
-        (uint32_t)w,
-        (uint32_t)h,
-        //std::max(_windowExtent.width, (uint32_t)w),
-        //std::max(_windowExtent.height, (uint32_t)h),
-        1
-    };
+    // _mainDeletionQueue.Push([=]() {
+    //     //Overall, this is a hack, like 100% a hack. What we are doing is checking if we've already deallocated the 
+    //     // image and returning if thats the case. This only happens bc we reinit the entire swapchain when we rescale the
+    //     // window. The reason we do that is kinda obvious, but I never want the engine to render a scene weirdly because a player
+    //     // opened it on a smaller monitor and then maximized on a different one.
+    //     // Because of this, we need to push every single new alloc to the deletion queue, however, that image may become stale later
 
-    _drawExtent.height = h;
-    _drawExtent.width = w;
+    //     if (_drawImage.deallocated)
+    //     {
+    //         return;
+    //     }
+    //     vkDestroyImageView(_device, _drawImage.imageView, nullptr);
+    //     vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
 
-    _drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-    _drawImage.imageExtent = drawImageExtent;
-
-    VkImageUsageFlags drawImageUsage{};
-    drawImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    drawImageUsage |= VK_IMAGE_USAGE_STORAGE_BIT; //Compute shader can write to it
-    drawImageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    VkImageCreateInfo createImageInfo = vkinit::image_create_info(_drawImage.imageFormat, drawImageUsage, drawImageExtent);
-
-    //We must allocate the image on the GPU
-    VmaAllocationCreateInfo vmaImageAllocInfo{};
-    vmaImageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    vmaImageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VK_CHECK(vmaCreateImage(_allocator, &createImageInfo, &vmaImageAllocInfo, &_drawImage.image, &_drawImage.allocation, nullptr));
-
-    //BUild an imgView
-    VkImageViewCreateInfo imageViewCreate = vkinit::imageview_create_info(_drawImage.imageFormat, _drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-    VK_CHECK(vkCreateImageView(_device, &imageViewCreate, nullptr, &_drawImage.imageView));
-
-    //Make DepthTexture
-    _depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
-    _depthImage.imageExtent = drawImageExtent;
-    VkImageUsageFlags depthImageUsages{};
-    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    VkImageCreateInfo dimgInfo = vkinit::image_create_info(_depthImage.imageFormat, depthImageUsages, drawImageExtent);
-
-    //ALlocate and create an image;
-    VK_CHECK(vmaCreateImage(_allocator, &dimgInfo, &vmaImageAllocInfo, &_depthImage.image, &_depthImage.allocation, nullptr));
-
-    //Build an imageView 
-    VkImageViewCreateInfo depthViewInfo = vkinit::imageview_create_info(_depthImage.imageFormat, _depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-    VK_CHECK(vkCreateImageView(_device, &depthViewInfo, nullptr, &_depthImage.imageView));
-
-    _mainDeletionQueue.Push([=]() {
-        //Overall, this is a hack, like 100% a hack. What we are doing is checking if we've already deallocated the 
-        // image and returning if thats the case. This only happens bc we reinit the entire swapchain when we rescale the
-        // window. The reason we do that is kinda obvious, but I never want the engine to render a scene weirdly because a player
-        // opened it on a smaller monitor and then maximized on a different one.
-        // Because of this, we need to push every single new alloc to the deletion queue, however, that image may become stale later
-
-        if (_drawImage.deallocated)
-        {
-            return;
-        }
-        vkDestroyImageView(_device, _drawImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _drawImage.image, _drawImage.allocation);
-
-        vkDestroyImageView(_device, _depthImage.imageView, nullptr);
-        vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
-        _drawImage.deallocated = true;
-    });
+    //     vkDestroyImageView(_device, _depthImage.imageView, nullptr);
+    //     vmaDestroyImage(_allocator, _depthImage.image, _depthImage.allocation);
+    //     _drawImage.deallocated = true;
+    // });
 }
 
 void VulkanEngine::InitalizeCommands()
@@ -907,78 +843,78 @@ void VulkanEngine::InitializePipelines()
 
 void VulkanEngine::InitializeBackgroundPipelines()
 {
-    VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
-    //Define the descriptor used for this pipeline.
-    computeLayout.setLayoutCount = 1;
-    computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
+    //VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
+    ////Define the descriptor used for this pipeline.
+    //computeLayout.setLayoutCount = 1;
+    //computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
 
-    VkPushConstantRange pushConstants{};
-    pushConstants.offset = 0;
-    pushConstants.size = sizeof(ComputePushConstants);
-    pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    //VkPushConstantRange pushConstants{};
+    //pushConstants.offset = 0;
+    //pushConstants.size = sizeof(ComputePushConstants);
+    //pushConstants.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-    computeLayout.pPushConstantRanges = &pushConstants;
-    computeLayout.pushConstantRangeCount = 1;
+    //computeLayout.pPushConstantRanges = &pushConstants;
+    //computeLayout.pushConstantRangeCount = 1;
 
-    VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_computePipelineLayout));
+    //VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_computePipelineLayout));
 
-    //Create Shaader
-    VkShaderModule skyShader;
-    VkShaderModule advSkyShader;
-    if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
-    {
-        fmt::println("Error when building a compute shader");
-    }
-    if (!vkutil::LoadShaderModule("../shaders/sky.slang.spv", _device, &advSkyShader))
-    {
-        fmt::println("Error when building a compute shader");
-    }
+    ////Create Shaader
+    //VkShaderModule skyShader;
+    //VkShaderModule advSkyShader;
+    //if (!vkutil::LoadShaderModule("../shaders/sky.comp.spv", _device, &skyShader))
+    //{
+    //    fmt::println("Error when building a compute shader");
+    //}
+    //if (!vkutil::LoadShaderModule("../shaders/sky.slang.spv", _device, &advSkyShader))
+    //{
+    //    fmt::println("Error when building a compute shader");
+    //}
 
-    VkPipelineShaderStageCreateInfo stageInfo{ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr };
-    stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-    stageInfo.pNext = nullptr;
-    stageInfo.module = skyShader;
-    stageInfo.pName = "main";
+    //VkPipelineShaderStageCreateInfo stageInfo{ .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pNext = nullptr };
+    //stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    //stageInfo.pNext = nullptr;
+    //stageInfo.module = skyShader;
+    //stageInfo.pName = "main";
 
-    VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
-    computePipelineCreateInfo.layout = _computePipelineLayout;
-    computePipelineCreateInfo.stage = stageInfo;
+    //VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
+    //computePipelineCreateInfo.layout = _computePipelineLayout;
+    //computePipelineCreateInfo.stage = stageInfo;
 
-    ComputeEffect sky;
-    sky.layout = _computePipelineLayout;
-    sky.name = "sky";
-    sky.data = {};
+    //ComputeEffect sky;
+    //sky.layout = _computePipelineLayout;
+    //sky.name = "sky";
+    //sky.data = {};
 
-    sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+    //sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
-    VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
+    //VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
 
-    //Change module to create one
-    computePipelineCreateInfo.stage.module = advSkyShader;
+    ////Change module to create one
+    //computePipelineCreateInfo.stage.module = advSkyShader;
 
-    ComputeEffect advSky;
-    advSky.layout = _computePipelineLayout;
-    advSky.name = "advSky";
-    advSky.data = {};
+    //ComputeEffect advSky;
+    //advSky.layout = _computePipelineLayout;
+    //advSky.name = "advSky";
+    //advSky.data = {};
 
-    //Default params
-    advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
-    advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
-    advSky.data.data3 = glm::vec4(5, 0.002, 0, 0);
+    ////Default params
+    //advSky.data.data1 = glm::vec4(0.2, 0.2, 0.9, 0.97);
+    //advSky.data.data2 = glm::vec4(0.002, 0.2, 1, 0.5);
+    //advSky.data.data3 = glm::vec4(5, 0.002, 0, 0);
 
-    VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
+    //VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &advSky.pipeline));
 
-    backgroundEffects.push_back(advSky);
-    backgroundEffects.push_back(sky);
+    //backgroundEffects.push_back(advSky);
+    //backgroundEffects.push_back(sky);
 
-    vkDestroyShaderModule(_device, skyShader, nullptr);
-    vkDestroyShaderModule(_device, advSkyShader, nullptr);
-    _mainDeletionQueue.Push([=]()
-    {
-        vkDestroyPipelineLayout(_device, _computePipelineLayout, nullptr);
-        vkDestroyPipeline(_device, advSky.pipeline, nullptr);
-        vkDestroyPipeline(_device, sky.pipeline, nullptr);
-    });
+    //vkDestroyShaderModule(_device, skyShader, nullptr);
+    //vkDestroyShaderModule(_device, advSkyShader, nullptr);
+    //_mainDeletionQueue.Push([=]()
+    //{
+    //    vkDestroyPipelineLayout(_device, _computePipelineLayout, nullptr);
+    //    vkDestroyPipeline(_device, advSky.pipeline, nullptr);
+    //    vkDestroyPipeline(_device, sky.pipeline, nullptr);
+    //});
 }
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer)>&& function)
@@ -1346,14 +1282,14 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     return newSurface;
 }
 
-void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
+AllocatedBuffer VulkanEngine::SetupGeometry(VkCommandBuffer cmd)
 {
     //Reset counters
     stats.triangleCount = 0;
-	stats.drawCalls = 0;
+    stats.drawCalls = 0;
     stats.transparents = 0;
 
-	auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::system_clock::now();
 
     //Begin setting up GPUSceneData
     //Allocate a new uniform buffer
@@ -1362,23 +1298,17 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     GetCurrentFrame()._deletionQueue.Push([=, this]()
     {
         DestroyBuffer(gpuSceneDataBuf);
-    });
-
+    }); 
+    
     //write the Global GPU buffer
     GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuf.allocation->GetMappedData();
     *sceneUniformData = _sceneData;
 
-    VkDescriptorSet globalDescriptor;
-    VKDescriptors::DescriptorWriter writer;
-    
-    //Create a descriptorSet that binds the global GPU dataBuffer
-    globalDescriptor = globalDescriptiorAllocator.Allocate(_device, _gpuSceneDataDescriptorLayout);
-    
-    writer
-        .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-        .WriteImage(1, shadowMap.depthImage.imageView, _defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-        .UpdateSet(_device, globalDescriptor);
+    return gpuSceneDataBuf;
+}
 
+void VulkanEngine::DrawGeometry(VkCommandBuffer cmd, VkDescriptorSet& globalDescriptor)
+{
     //Begin a render pass to our drawImage
     VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo depthAttachmentInfo = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -1410,12 +1340,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     //Clear drawCTX
     mainDrawCtx.OpaqueSurfaces.clear();
     mainDrawCtx.TransparentSurfaces.clear();
-
-	auto end = std::chrono::system_clock::now();
-
-	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
-	stats.meshDrawTime = elapsed.count() / 1000.0f;
 }
 
 //AutoFloatCVar farPlane("Shadow::Farplane", "Changes the value of the farplane in the shadow calc", 10000.0f);
@@ -1425,7 +1349,7 @@ AutoFloatCVar CVAR_shadow_x("shadow.x", "Position of the Shadowmap in the X plan
 AutoFloatCVar CVAR_shadow_y("shadow.y", "Position of the Shadowmap in the Y plane", -1000.0f);
 AutoFloatCVar CVAR_shadow_z("shadow.z", "Position of the Shadowmap in the Z plane", 100.0f);
 
-void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
+VkDescriptorSet VulkanEngine::SetupShadows(VkCommandBuffer cmd)
 {
     GPUSceneData shadowScene;
     {
@@ -1472,7 +1396,11 @@ void VulkanEngine::DrawShadows(VkCommandBuffer cmd)
     //Create a descriptorSet that binds the global GPU dataBuffer
     globalDescriptor = globalDescriptiorAllocator.Allocate(_device, _gpuSceneDataDescriptorLayout);
 
-    shadowMap.Draw(cmd, globalDescriptor, writer, gpuSceneDataBuf);
+    writer
+        .WriteBuffer(0, gpuSceneDataBuf.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+        .UpdateSet(_device, globalDescriptor);
+
+    return globalDescriptor;
 }
 
 void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
@@ -1875,6 +1803,61 @@ AllocatedImage VulkanEngine::CopyDataToImage(const void* data, AllocatedImage im
     DestroyBuffer(uploadBuff);
 
     return img;
+}
+
+/* FillDrawImage
+Creates an drawimage in situ (inplace) which is used exclusively for our drawImage abstraction.
+Do not use this for normal images.
+*/
+void VulkanEngine::FillDrawImage(AllocatedImage* image, bool isDepth)
+{
+    int w, h;
+    SDL_GetWindowSize(_window, &w, &h);
+
+    VkExtent3D drawImageExtent =
+    {
+        (uint32_t)w,
+        (uint32_t)h,
+        //std::max(_windowExtent.width, (uint32_t)w),
+        //std::max(_windowExtent.height, (uint32_t)h),
+        1
+    };
+
+    image->imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    image->imageExtent = drawImageExtent;
+
+    VkImageUsageFlags drawImageUsage{};
+    drawImageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    drawImageUsage |= VK_IMAGE_USAGE_STORAGE_BIT; //Compute shader can write to it
+    drawImageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+   
+
+    if (isDepth)
+    {
+        image->imageFormat = VK_FORMAT_D32_SFLOAT;
+        drawImageUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+ 
+    VkImageCreateInfo createImageInfo = vkinit::image_create_info(image->imageFormat, drawImageUsage, drawImageExtent);
+    //We must allocate the image on the GPU
+    VmaAllocationCreateInfo vmaImageAllocInfo{};
+    vmaImageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    vmaImageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    VK_CHECK(vmaCreateImage(_allocator, &createImageInfo, &vmaImageAllocInfo, &image->image, &image->allocation, nullptr));
+
+    //BUild an imgView
+    VkImageViewCreateInfo imageViewCreate{};
+    if (!isDepth)
+    {
+        imageViewCreate = vkinit::imageview_create_info(image->imageFormat, image->image, VK_IMAGE_ASPECT_COLOR_BIT);
+    }
+    else
+    {
+        imageViewCreate = vkinit::imageview_create_info(image->imageFormat, image->image, VK_IMAGE_ASPECT_DEPTH_BIT);
+    }
+    VK_CHECK(vkCreateImageView(_device, &imageViewCreate, nullptr, &image->imageView));
 }
 
 void VulkanEngine::DestroyImage(const AllocatedImage& img)

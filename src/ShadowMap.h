@@ -10,7 +10,7 @@ public:
 	void CreateShadowMap(VulkanEngine& engine, uint32_t width, uint32_t height);
 	void TransferMapToR32(VulkanEngine& engine);
 
-	void Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor, VKDescriptors::DescriptorWriter writer, AllocatedBuffer gpuSceneDataBuf) override;
+	void Draw(VkCommandBuffer cmd, VkDescriptorSet globalDescriptor) override;
 	void Init() override;
 
 	AllocatedImage depthImage;
