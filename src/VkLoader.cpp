@@ -14,6 +14,8 @@ int unknownImg = 0;
 void LoadedGLTF::ClearAll()
 {
 	fmt::println("Clearing GLTF data...");
+	fPath = 0, Vector = 0, BView = 0, Meshes = 0, Samplers = 0, Materials = 0;
+	
 	VkDevice device = engine->_device;
 	
 	descriptorPool.DestroyPool(device); //Destroy the descriptor pool
@@ -335,13 +337,16 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 			return {};
 	}
 
+	//Renderer requires atleast one material
+	auto materialCount = std::max(gltf.materials.size(), (size_t)1);
+
 	std::vector<VKDescriptors::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { 
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 }, //Our three images for the material, plus our 3 enviroment textures (potentially swap them out perobject based on a voxelgrid?)
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 }, //
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 }
 	};
 
-	file.descriptorPool.InitPool(engine->_device, gltf.materials.size(), sizes);
+	file.descriptorPool.InitPool(engine->_device, materialCount, sizes);
 
 	//load samplers
 	for (fastgltf::Sampler& sampler : gltf.samplers)
@@ -387,12 +392,32 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 		}
 	}
 
-	file.materialDataBuffer = engine->CreateBuffer(sizeof(GLTFMetallicRoughness::MaterialConstants) * gltf.materials.size(), //Create GPUBuff
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-	int dataIndex = 0;
-	GLTFMetallicRoughness::MaterialConstants* sceneData = (GLTFMetallicRoughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData; //Map the buffer to CPU
-	
+	file.materialDataBuffer = engine->CreateBuffer(sizeof(GLTFMetallicRoughness::MaterialConstants) * materialCount, //Create GPUBuff
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		int dataIndex = 0;
+		GLTFMetallicRoughness::MaterialConstants* sceneData = (GLTFMetallicRoughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData; //Map the buffer to CPU
+
+	//If there are no materials present, build one. (Some GLTF samples do not supply materials and will fail otherwise)
+	if (gltf.materials.size() < 1)
+	{
+		GLTFMetallicRoughness::MaterialResources resources;
+		resources.colorImage = engine->GetDefaultImage(); //Default image for now
+		resources.colorSampler = engine->GetDefaultSampler(); //Default sampler for now
+		resources.metalRoughImage = engine->GetWhiteImage(); //Default image for now
+		resources.normalImage = engine->GetWhiteImage(); //Default image for now
+
+		//Uniform buffer for the material
+		resources.dataBuffer = file.materialDataBuffer.buffer;
+		resources.dataBufferOffset = 0;
+
+		std::shared_ptr<GLTFMaterial> newMaterial = std::make_shared<GLTFMaterial>();
+		materials.push_back(newMaterial);
+		file.materials["ERROR"] = newMaterial; //Push mat into the map
+		newMaterial->data = engine->metalRoughMaterial.WriteMaterial(engine->_device, MaterialPass::MainColor, resources, file.descriptorPool);
+		Materials++;
+	}
 
 	//Loading materials
 	for (fastgltf::Material& mat : gltf.materials)
@@ -656,6 +681,16 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::f
 
 			newMesh->meshBuffers = engine->UploadMesh(indices, vertices); //Upload the meshs to the GPU
 		}
+	}
+
+	for (fastgltf::Skin& skin : gltf.skins)
+	{
+		auto inverseBindMatriceIndex = *skin.inverseBindMatrices;
+		auto skeleton = *skin.skeleton;
+		auto node = skin.joints.size();
+		auto name = skin.name;
+
+		fmt::println("inverseBindMatricesCount {}, Skeleton {}, Joints {}, Name {}", std::to_string(inverseBindMatriceIndex), std::to_string(skeleton), std::to_string(node), name);
 	}
 
 	//load nodes & meshes
