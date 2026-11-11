@@ -17,6 +17,16 @@ add_subdirectory(src)
 
 find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 
+find_program(SLANG_COMPILER slangc
+    HINTS
+        /usr/bin
+        /usr/local/bin
+        "$ENV{VULKAN_SDK}/Bin"
+        "$ENV{VULKAN_SDK}/bin"
+    REQUIRED
+)
+
+
 file(GLOB_RECURSE GLSL_SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/shaders/*.frag"
     "${PROJECT_SOURCE_DIR}/shaders/*.vert"
@@ -35,11 +45,28 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
 
+file(GLOB_RECURSE SLANG_SOURCE
+"${PROJECT_SOURCE_DIR}/shaders/*.slang"
+)
+
+foreach(SLANG ${SLANG_SOURCE})
+  message(STATUS "BUILDING SHADER")
+  get_filename_component(FILE_NAME ${SLANG} NAME)
+  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+  message(STATUS ${SLANG})
+  add_custom_command(
+    OUTPUT ${SPIRV}
+    COMMAND ${SLANG_COMPILER} ${SLANG} -target spirv -o ${SPIRV}
+    DEPENDS ${SLANG})
+  list(APPEND SLANG_BINARY_FILES ${SPIRV})
+endforeach(SLANG)
+    
 add_custom_target(
     Shaders 
     DEPENDS ${SPIRV_BINARY_FILES}
+    DEPENDS ${SLANG_BINARY_FILES}
     )
-    
+
 if (MSVC)
   add_compile_options(/MP)
 endif()    
